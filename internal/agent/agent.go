@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"log"
 	"os"
 	"os/signal"
 	"sync"
@@ -63,6 +64,7 @@ func (a *Agent) Start(ctx context.Context) error {
 				return nil
 			case <-pollTicker.C:
 				metrics := a.collector.Collect()
+				log.Printf("Collected %d metrics", len(metrics))
 				mu.Lock()
 				collectedMetrics = metrics
 				mu.Unlock()
@@ -79,13 +81,18 @@ func (a *Agent) Start(ctx context.Context) error {
 			case <-reportticker.C:
 				mu.RLock()
 				metrics := collectedMetrics
-				mu.RLock()
+				mu.RUnlock()
 
 				if len(metrics) > 0 {
 					sendCtx, cancelSend := context.WithTimeout(gctx, 5*time.Second)
 					defer cancelSend()
 
-					_ = a.sender.SendMetrics(sendCtx, metrics)
+					err := a.sender.SendMetrics(sendCtx, metrics)
+					if err != nil {
+						log.Printf("Failed to send metrics: %v", err)
+					} else {
+						log.Printf("Successfully sent metrics to %s", a.config.GetServerURL())
+					}
 				}
 			}
 		}
