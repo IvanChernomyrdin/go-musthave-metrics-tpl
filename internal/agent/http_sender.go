@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"path"
 	"runtime"
@@ -88,7 +90,39 @@ func (s *HttpSender) SendMetrics(ctx context.Context, metrics []model.Metrics) e
 }
 
 func (s *HttpSender) sendOne(ctx context.Context, metric model.Metrics) error {
-	//экранируем id чтобы не поломался url
+	// Пробуем сначала новый JSON формат
+	if err := s.sendJSON(ctx, metric); err == nil {
+		return nil
+	}
+
+	// Если JSON не удался - пробуем старый формат
+	return s.sendText(ctx, metric)
+}
+
+// Новый JSON формат
+func (s *HttpSender) sendJSON(ctx context.Context, metric model.Metrics) error {
+	base := strings.TrimRight(s.url, "/")
+	fullURL := base + "/update"
+
+	resp, err := s.client.R().
+		SetContext(ctx).
+		SetHeader("Content-Type", "application/json").
+		SetBody(metric).
+		Post(fullURL)
+
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("status %d", resp.StatusCode())
+	}
+
+	return nil
+}
+
+// Старый text формат
+func (s *HttpSender) sendText(ctx context.Context, metric model.Metrics) error {
 	idEscaped := url.PathEscape(metric.ID)
 
 	var valueStr string
@@ -101,17 +135,20 @@ func (s *HttpSender) sendOne(ctx context.Context, metric model.Metrics) error {
 		log.Printf("unsupported metric type: %s", metric.MType)
 	}
 
-	//чистим url удаляем всё справа от /, формируем отправку метрики по тз
 	base := strings.TrimRight(s.url, "/")
 	fullURL := base + "/" + path.Join("update", metric.MType, idEscaped, valueStr)
-	//отправка метрик
-	_, err := s.client.R().
+
+	resp, err := s.client.R().
 		SetContext(ctx).
 		SetHeader("Content-Type", "text/plain").
 		Post(fullURL)
 
 	if err != nil {
-		log.Printf("create request: %v", err)
+		return err
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("status %d", resp.StatusCode())
 	}
 
 	return nil

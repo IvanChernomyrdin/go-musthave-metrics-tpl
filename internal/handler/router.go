@@ -12,7 +12,13 @@ func NewRouter(h *Handler) http.Handler {
 
 	r.Use(middleware.LoggerMiddleware())
 
+	//старый вариант
 	r.Post("/update/{type}/{name}/{value}", h.UpdateMetric)
+	//новый вариант
+	r.Post("/update", h.UpdateMetric)
+
+	//получение метрики по json
+	r.Post("/value", h.GetValueJSON)
 
 	r.Get("/value/{type}/{name}", h.GetValue)
 	r.Get("/", h.GetAll)
