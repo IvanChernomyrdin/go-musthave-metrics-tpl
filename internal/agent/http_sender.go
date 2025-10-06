@@ -1,7 +1,10 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -90,8 +93,27 @@ func (s *HttpSender) SendMetrics(ctx context.Context, metrics []model.Metrics) e
 }
 
 func (s *HttpSender) sendOne(ctx context.Context, metric model.Metrics) error {
+	//сериализуем в json
+	data, err := json.Marshal(metric)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metric: %w", err)
+	}
+	//сжимаем данные в gzip
+	var compressionBuf bytes.Buffer
+	gz := gzip.NewWriter(&compressionBuf)
+
+	//записываем в gzip
+	if _, err := gz.Write(data); err != nil {
+		return fmt.Errorf("failed to write data to gzip: %w", err)
+	}
+
+	//принудительное закрытие gzip
+	if err := gz.Close(); err != nil {
+		return fmt.Errorf("failed to close gzip writer: %w", err)
+	}
+
 	// Пробуем сначала новый JSON формат
-	if err := s.sendJSON(ctx, metric); err == nil {
+	if err := s.sendJSON(ctx, compressionBuf.Bytes()); err == nil {
 		return nil
 	}
 
@@ -100,13 +122,14 @@ func (s *HttpSender) sendOne(ctx context.Context, metric model.Metrics) error {
 }
 
 // Новый JSON формат
-func (s *HttpSender) sendJSON(ctx context.Context, metric model.Metrics) error {
+func (s *HttpSender) sendJSON(ctx context.Context, metric []byte) error {
 	base := strings.TrimRight(s.url, "/")
 	fullURL := base + "/update"
 
 	resp, err := s.client.R().
 		SetContext(ctx).
 		SetHeader("Content-Type", "application/json").
+		SetHeader("Content-Encoding", "gzip").
 		SetBody(metric).
 		Post(fullURL)
 

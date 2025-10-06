@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"sync"
@@ -39,21 +38,6 @@ func (a *Agent) Start(ctx context.Context) error {
 	defer reportticker.Stop()
 
 	var collectedMetrics []model.Metrics
-	// 	for {
-	// 		select {
-	// 		case <-ctx.Done():
-	// 			return nil
-	// 		case <-pollTicker.C:
-	// 			collectedMetrics = a.collector.Collect()
-	// 		case <-reportticker.C:
-	// 			if len(collectedMetrics) <= 0 {
-	// 				continue
-	// 			}
-	// 			_ = a.sender.SendMetrics(ctx, collectedMetrics)
-	// 		}
-	// 	}
-	// }
-
 	var mu sync.RWMutex
 
 	g.Go(func() error {
@@ -64,7 +48,7 @@ func (a *Agent) Start(ctx context.Context) error {
 				return nil
 			case <-pollTicker.C:
 				metrics := a.collector.Collect()
-				log.Printf("Collected %d metrics", len(metrics))
+				// log.Printf("Collected %d metrics", len(metrics))
 				mu.Lock()
 				collectedMetrics = metrics
 				mu.Unlock()
@@ -89,9 +73,9 @@ func (a *Agent) Start(ctx context.Context) error {
 
 					err := a.sender.SendMetrics(sendCtx, metrics)
 					if err != nil {
-						log.Printf("Failed to send metrics: %v", err)
+						// log.Printf("Failed to send metrics: %v", err)
 					} else {
-						log.Printf("Successfully sent metrics to %s", a.config.GetServerURL())
+						// log.Printf("Successfully sent metrics to %s", a.config.GetServerURL())
 					}
 				}
 			}

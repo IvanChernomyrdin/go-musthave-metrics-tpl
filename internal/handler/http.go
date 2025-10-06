@@ -22,9 +22,7 @@ type Handler struct {
 func NewHandler(svc *service.MetricsService) *Handler { return &Handler{svc: svc} }
 
 func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-
-	// новый формат json
+	// НОВЫЙ ФОРМАТ JSON
 	if r.Body != nil && r.ContentLength > 0 {
 		var metric model.Metrics
 		if err := json.NewDecoder(r.Body).Decode(&metric); err == nil {
@@ -32,8 +30,9 @@ func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("OK"))
+			json.NewEncoder(w).Encode(map[string]string{"status": "OK"})
 			return
 		}
 		// Если не JSON - восстанавливаем body для старого формата
@@ -42,7 +41,8 @@ func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Старый формат
+	// СТАРЫЙ ФОРМАТ - text/plain
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	h.processURLParams(w, r)
 }
 
