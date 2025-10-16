@@ -10,6 +10,7 @@ import (
 	"time"
 
 	config "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config"
+	db "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config/db"
 	httpserver "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/handler"
 	memory "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/memory"
 	service "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/service"
@@ -18,6 +19,8 @@ import (
 func main() {
 	//загрузили тут flag и env
 	cfg := config.Load()
+
+	db.Init(cfg.DatabaseDSN)
 
 	repo := memory.New()
 	svc := service.NewMetricsService(repo)

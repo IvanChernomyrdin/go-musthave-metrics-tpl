@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"text/template"
 
+	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config/db"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/service"
 	"github.com/go-chi/chi/v5"
@@ -213,4 +215,14 @@ func (h *Handler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
+}
+
+func (h *Handler) PingDB(w http.ResponseWriter, r *http.Request) {
+	if err := db.Ping(); err != nil {
+		http.Error(w, "Ошибка соединения с базой данных", http.StatusInternalServerError)
+		log.Printf("Ошибка при проверке соединения с БД: %v", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
