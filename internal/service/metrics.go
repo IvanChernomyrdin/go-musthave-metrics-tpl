@@ -51,7 +51,7 @@ func (ms *MetricsService) GetCounter(id string) (int64, bool) {
 	return ms.repo.GetCounter(id)
 }
 
-func (s *MetricsService) GetValue(mtype, name string) (string, bool, bool) {
+func (ms *MetricsService) GetValue(mtype, name string) (string, bool, bool) {
 	switch mtype {
 	case Gauge:
 		if val, ok := s.repo.GetGauge(name); ok {
@@ -71,7 +71,7 @@ func (s *MetricsService) GetValue(mtype, name string) (string, bool, bool) {
 	}
 }
 
-func (s *MetricsService) AllText() map[string]string {
+func (ms *MetricsService) AllText() map[string]string {
 	gs, cs := s.repo.GetAll()
 	out := make(map[string]string, len(gs)+len(cs))
 
@@ -85,7 +85,7 @@ func (s *MetricsService) AllText() map[string]string {
 	return out
 }
 
-func (s *MetricsService) SaveToFile(filename string) error {
+func (ms *MetricsService) SaveToFile(filename string) error {
 	if filename == "" {
 		return nil
 	}
@@ -144,7 +144,7 @@ func (s *MetricsService) SaveToFile(filename string) error {
 	return nil
 }
 
-func (s *MetricsService) LoadFromFile(filename string) error {
+func (ms *MetricsService) LoadFromFile(filename string) error {
 	if filename == "" {
 		return nil
 	}
@@ -198,7 +198,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 }
 
 // SaveOnUpdateMiddleware middleware для синхронного сохранения после обновлений
-func (s *MetricsService) SaveOnUpdateMiddleware(filename string) func(http.Handler) http.Handler {
+func (ms *MetricsService) SaveOnUpdateMiddleware(filename string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rw := &responseWriter{
@@ -221,7 +221,7 @@ func (s *MetricsService) SaveOnUpdateMiddleware(filename string) func(http.Handl
 }
 
 // StartPeriodicSaving запускает периодическое сохранение метрик
-func (s *MetricsService) StartPeriodicSaving(filename string, interval time.Duration) *time.Ticker {
+func (ms *MetricsService) StartPeriodicSaving(filename string, interval time.Duration) *time.Ticker {
 	ticker := time.NewTicker(interval)
 	go func() {
 		for range ticker.C {

@@ -72,11 +72,6 @@ func (a *Agent) Start(ctx context.Context) error {
 					defer cancelSend()
 
 					err := a.sender.SendMetrics(sendCtx, metrics)
-					if err != nil {
-						// log.Printf("Failed to send metrics: %v", err)
-					} else {
-						// log.Printf("Successfully sent metrics to %s", a.config.GetServerURL())
-					}
 				}
 			}
 		}
