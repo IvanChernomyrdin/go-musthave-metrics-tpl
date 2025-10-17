@@ -70,7 +70,7 @@ func (a *Agent) Start(ctx context.Context) error {
 					sendCtx, cancelSend := context.WithTimeout(gctx, 5*time.Second)
 					defer cancelSend()
 
-					_ := a.sender.SendMetrics(sendCtx, metrics)
+					_ = a.sender.SendMetrics(sendCtx, metrics)
 				}
 			}
 		}
