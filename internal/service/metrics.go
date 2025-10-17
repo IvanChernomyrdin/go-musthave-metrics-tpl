@@ -54,7 +54,7 @@ func (ms *MetricsService) GetCounter(id string) (int64, bool) {
 func (ms *MetricsService) GetValue(mtype, name string) (string, bool, bool) {
 	switch mtype {
 	case Gauge:
-		if val, ok := s.repo.GetGauge(name); ok {
+		if val, ok := ms.repo.GetGauge(name); ok {
 			out := strconv.FormatFloat(val, 'f', 3, 64)
 			out = strings.TrimRight(out, "0")
 			out = strings.TrimRight(out, ".")
@@ -62,7 +62,7 @@ func (ms *MetricsService) GetValue(mtype, name string) (string, bool, bool) {
 		}
 		return "", false, true
 	case Counter:
-		if val, ok := s.repo.GetCounter(name); ok {
+		if val, ok := ms.repo.GetCounter(name); ok {
 			return strconv.FormatInt(val, 10), true, true
 		}
 		return "", false, true
@@ -72,7 +72,7 @@ func (ms *MetricsService) GetValue(mtype, name string) (string, bool, bool) {
 }
 
 func (ms *MetricsService) AllText() map[string]string {
-	gs, cs := s.repo.GetAll()
+	gs, cs := ms.repo.GetAll()
 	out := make(map[string]string, len(gs)+len(cs))
 
 	for key, val := range gs {
@@ -96,7 +96,7 @@ func (ms *MetricsService) SaveToFile(filename string) error {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
-	gauges, counters := s.repo.GetAll()
+	gauges, counters := ms.repo.GetAll()
 	var metrics []model.Metrics
 
 	for id, value := range gauges {
@@ -169,13 +169,13 @@ func (ms *MetricsService) LoadFromFile(filename string) error {
 		switch metric.MType {
 		case Gauge:
 			if metric.Value != nil {
-				if err := s.repo.UpsertGauge(metric.ID, *metric.Value); err != nil {
+				if err := ms.repo.UpsertGauge(metric.ID, *metric.Value); err != nil {
 					return fmt.Errorf("failed to restore gauge %s: %w", metric.ID, err)
 				}
 			}
 		case Counter:
 			if metric.Delta != nil {
-				if err := s.repo.UpsertCounter(metric.ID, *metric.Delta); err != nil {
+				if err := ms.repo.UpsertCounter(metric.ID, *metric.Delta); err != nil {
 					return fmt.Errorf("failed to restore counter %s: %w", metric.ID, err)
 				}
 			}
@@ -212,7 +212,7 @@ func (ms *MetricsService) SaveOnUpdateMiddleware(filename string) func(http.Hand
 			if r.Method == http.MethodPost &&
 				(strings.HasPrefix(r.URL.Path, "/update/") || r.URL.Path == "/update") &&
 				rw.statusCode == http.StatusOK {
-				if err := s.SaveToFile(filename); err != nil {
+				if err := ms.SaveToFile(filename); err != nil {
 					log.Printf("Error saving metrics synchronously: %v", err)
 				}
 			}
@@ -225,7 +225,7 @@ func (ms *MetricsService) StartPeriodicSaving(filename string, interval time.Dur
 	ticker := time.NewTicker(interval)
 	go func() {
 		for range ticker.C {
-			if err := s.SaveToFile(filename); err != nil {
+			if err := ms.SaveToFile(filename); err != nil {
 				log.Printf("Error during periodic save: %v", err)
 			} else {
 				log.Printf("Metrics saved to %s", filename)
