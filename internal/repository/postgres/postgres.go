@@ -5,11 +5,34 @@ import (
 	"log"
 
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config/db"
+	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 )
 
 type PostgresStorage struct {
 	db *sql.DB
 }
+
+const (
+	upsertGaugeSQL = `
+		INSERT INTO metrics (id, mtype, value, delta) 
+		VALUES ($1, $2, $3, NULL)
+		ON CONFLICT (id) 
+		DO UPDATE SET 
+			value = $3,
+			delta = NULL,
+			updated_at = CURRENT_TIMESTAMP
+	`
+
+	upsertCounterSQL = `
+		INSERT INTO metrics (id, mtype, delta, value) 
+		VALUES ($1, $2, $3, NULL)
+		ON CONFLICT (id) 
+		DO UPDATE SET 
+			delta = COALESCE(metrics.delta, 0) + $3,
+			value = NULL,
+			updated_at = CURRENT_TIMESTAMP
+	`
+)
 
 func New() *PostgresStorage {
 	return &PostgresStorage{
@@ -18,15 +41,7 @@ func New() *PostgresStorage {
 }
 
 func (p *PostgresStorage) UpsertGauge(id string, value float64) error {
-	_, err := p.db.Exec(`
-		INSERT INTO metrics (id, mtype, value, delta) 
-		VALUES ($1, $2, $3, NULL)
-		ON CONFLICT (id) 
-		DO UPDATE SET 
-			value = $3,
-			delta = NULL,
-			updated_at = CURRENT_TIMESTAMP
-	`, id, "gauge", value)
+	_, err := p.db.Exec(upsertGaugeSQL, id, "gauge", value)
 
 	if err != nil {
 		log.Printf("Ошибка сохранения gauge метрики: %v", err)
@@ -35,15 +50,7 @@ func (p *PostgresStorage) UpsertGauge(id string, value float64) error {
 }
 
 func (p *PostgresStorage) UpsertCounter(id string, delta int64) error {
-	_, err := p.db.Exec(`
-		INSERT INTO metrics (id, mtype, delta, value) 
-		VALUES ($1, $2, $3, NULL)
-		ON CONFLICT (id) 
-		DO UPDATE SET 
-			delta = COALESCE(metrics.delta, 0) + $3,
-			value = NULL,
-			updated_at = CURRENT_TIMESTAMP
-	`, id, "counter", delta)
+	_, err := p.db.Exec(upsertCounterSQL, id, "counter", delta)
 
 	if err != nil {
 		log.Printf("Ошибка сохранения counter метрики: %v", err)
@@ -138,4 +145,30 @@ func (p *PostgresStorage) GetAll() (map[string]float64, map[string]int64) {
 
 func (p *PostgresStorage) Close() error {
 	return nil
+}
+
+func (p *PostgresStorage) UpdateMetricsBatch(metrics []model.Metrics) error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, metric := range metrics {
+		switch metric.MType {
+		case model.Gauge:
+			_, err := tx.Exec(upsertGaugeSQL, metric.ID, "gauge", *metric.Value)
+			if err != nil {
+				return err
+			}
+
+		case model.Counter:
+			_, err := tx.Exec(upsertCounterSQL, metric.ID, "counter", *metric.Delta)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit()
 }

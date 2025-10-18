@@ -67,6 +67,14 @@ func (s *HTTPSender) SendMetrics(ctx context.Context, metrics []model.Metrics) e
 		}
 		validMetrics = append(validMetrics, metric)
 	}
+
+	// отправим батч если сработает выходим или работаем по старому
+	if err := s.sendBatch(ctx, validMetrics); err == nil {
+		return nil
+	} else {
+		log.Print(err)
+	}
+
 	//ограничим параллелизм семафором
 	semafor := make(chan struct{}, s.maxConc)
 
@@ -172,6 +180,43 @@ func (s *HTTPSender) sendText(ctx context.Context, metric model.Metrics) error {
 
 	if resp.StatusCode() != http.StatusOK {
 		return fmt.Errorf("status %d", resp.StatusCode())
+	}
+
+	return nil
+}
+
+// отправка батча
+func (s *HTTPSender) sendBatch(ctx context.Context, metrics []model.Metrics) error {
+	data, err := json.Marshal(metrics)
+	if err != nil {
+		return err
+	}
+
+	var compressionBuf bytes.Buffer
+	gz := gzip.NewWriter(&compressionBuf)
+	if _, err := gz.Write(data); err != nil {
+		return err
+	}
+	if err := gz.Close(); err != nil {
+		return err
+	}
+
+	base := strings.TrimRight(s.url, "/")
+	fullURL := base + "/updates/"
+
+	resp, err := s.client.R().
+		SetContext(ctx).
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(compressionBuf.Bytes()).
+		Post(fullURL)
+
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return err
 	}
 
 	return nil
