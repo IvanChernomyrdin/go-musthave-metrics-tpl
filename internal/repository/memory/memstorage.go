@@ -9,11 +9,12 @@ type MemStorage struct {
 }
 
 type Storage interface {
-	UpsertGauge(name string, v float64)
-	UpsertCounter(name string, d int64)
+	UpsertGauge(name string, v float64) error
+	UpsertCounter(name string, d int64) error
 	GetGauge(name string) (float64, bool)
 	GetCounter(name string) (int64, bool)
 	GetAll() (map[string]float64, map[string]int64)
+	Close() error
 }
 
 func New() *MemStorage {
@@ -65,4 +66,7 @@ func (m *MemStorage) GetAll() (map[string]float64, map[string]int64) {
 	}
 
 	return gs, cs
+}
+func (m *MemStorage) Close() error {
+	return nil
 }
