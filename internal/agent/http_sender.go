@@ -20,16 +20,16 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type HttpSender struct {
+type HTTPSender struct {
 	client  *resty.Client
 	url     string
 	maxConc int //кол-во горутин
 }
 
-func NewHttpSender(serverURL string) *HttpSender {
+func NewHTTPSender(serverURL string) *HTTPSender {
 	client := resty.New()
 
-	return &HttpSender{
+	return &HTTPSender{
 		client:  client,
 		url:     strings.TrimRight(serverURL, "/"),
 		maxConc: max(2, runtime.NumCPU()/2),
@@ -58,7 +58,7 @@ func validateMetric(metric model.Metrics) error {
 	return nil
 }
 
-func (s *HttpSender) SendMetrics(ctx context.Context, metrics []model.Metrics) error {
+func (s *HTTPSender) SendMetrics(ctx context.Context, metrics []model.Metrics) error {
 	validMetrics := make([]model.Metrics, 0, len(metrics))
 
 	for _, metric := range metrics {
@@ -67,6 +67,14 @@ func (s *HttpSender) SendMetrics(ctx context.Context, metrics []model.Metrics) e
 		}
 		validMetrics = append(validMetrics, metric)
 	}
+
+	// отправим батч если сработает выходим или работаем по старому
+	if err := s.sendBatch(ctx, validMetrics); err == nil {
+		return nil
+	} else {
+		log.Print(err)
+	}
+
 	//ограничим параллелизм семафором
 	semafor := make(chan struct{}, s.maxConc)
 
@@ -92,7 +100,7 @@ func (s *HttpSender) SendMetrics(ctx context.Context, metrics []model.Metrics) e
 	return nil
 }
 
-func (s *HttpSender) sendOne(ctx context.Context, metric model.Metrics) error {
+func (s *HTTPSender) sendOne(ctx context.Context, metric model.Metrics) error {
 	//сериализуем в json
 	data, err := json.Marshal(metric)
 	if err != nil {
@@ -122,7 +130,7 @@ func (s *HttpSender) sendOne(ctx context.Context, metric model.Metrics) error {
 }
 
 // Новый JSON формат
-func (s *HttpSender) sendJSON(ctx context.Context, metric []byte) error {
+func (s *HTTPSender) sendJSON(ctx context.Context, metric []byte) error {
 	base := strings.TrimRight(s.url, "/")
 	fullURL := base + "/update"
 
@@ -145,7 +153,7 @@ func (s *HttpSender) sendJSON(ctx context.Context, metric []byte) error {
 }
 
 // Старый text формат
-func (s *HttpSender) sendText(ctx context.Context, metric model.Metrics) error {
+func (s *HTTPSender) sendText(ctx context.Context, metric model.Metrics) error {
 	idEscaped := url.PathEscape(metric.ID)
 
 	var valueStr string
@@ -172,6 +180,43 @@ func (s *HttpSender) sendText(ctx context.Context, metric model.Metrics) error {
 
 	if resp.StatusCode() != http.StatusOK {
 		return fmt.Errorf("status %d", resp.StatusCode())
+	}
+
+	return nil
+}
+
+// отправка батча
+func (s *HTTPSender) sendBatch(ctx context.Context, metrics []model.Metrics) error {
+	data, err := json.Marshal(metrics)
+	if err != nil {
+		return err
+	}
+
+	var compressionBuf bytes.Buffer
+	gz := gzip.NewWriter(&compressionBuf)
+	if _, err := gz.Write(data); err != nil {
+		return err
+	}
+	if err := gz.Close(); err != nil {
+		return err
+	}
+
+	base := strings.TrimRight(s.url, "/")
+	fullURL := base + "/updates/"
+
+	resp, err := s.client.R().
+		SetContext(ctx).
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(compressionBuf.Bytes()).
+		Post(fullURL)
+
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return err
 	}
 
 	return nil

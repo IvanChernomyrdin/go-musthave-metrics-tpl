@@ -22,8 +22,10 @@ func NewRouter(h *Handler) http.Handler {
 	r.Post("/update", h.UpdateMetric)
 	r.Post("/update/", h.UpdateMetric)
 	r.Post("/update/{type}/{name}/{value}", h.UpdateMetric)
+	r.Post("/updates/", h.UpdateMetricsBatch)
 	r.Get("/value/{type}/{name}", h.GetValue)
 	r.Get("/", h.GetAll)
+	r.Get("/ping", h.PingDB)
 
 	return r
 }
