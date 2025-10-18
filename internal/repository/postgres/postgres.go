@@ -107,6 +107,9 @@ func (p *PostgresStorage) GetAll() (map[string]float64, map[string]int64) {
 		}
 		gauges[id] = value
 	}
+	if err := rows.Err(); err != nil {
+		log.Printf("Ошибка при итерации gauge метрик: %v", err)
+	}
 
 	// Получаем все counter метрики
 	rows, err = p.db.Query(
@@ -125,6 +128,9 @@ func (p *PostgresStorage) GetAll() (map[string]float64, map[string]int64) {
 			continue
 		}
 		counters[id] = value
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("Ошибка при итерации counter метрик: %v", err)
 	}
 
 	return gauges, counters

@@ -14,17 +14,17 @@ import (
 )
 
 type EnvConfig struct {
-	ADDRESS         string `env:"ADDRESS"`
-	REPORT_INTERVAL int    `env:"REPORT_INTERVAL"`
-	POLL_INTERVAL   int    `env:"POLL_INTERVAL"`
+	Address        string `env:"ADDRESS"`
+	ReportInterval int    `env:"REPORT_INTERVAL"`
+	PollInterval   int    `env:"POLL_INTERVAL"`
 }
 
 func main() {
 	var addrAgent string
-	var pollInterval, reportInterval int // используем int вместо duration
+	var pollInterval, reportInterval int
 	flag.StringVar(&addrAgent, "a", "localhost:8080", "http-agent address")
-	flag.IntVar(&pollInterval, "p", 2, "poll interval in seconds")      // Int флаг
-	flag.IntVar(&reportInterval, "r", 10, "report interval in seconds") // Int флаг
+	flag.IntVar(&pollInterval, "p", 2, "poll interval in seconds")
+	flag.IntVar(&reportInterval, "r", 10, "report interval in seconds")
 	flag.Parse()
 
 	var envCfg EnvConfig
@@ -34,14 +34,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if envCfg.ADDRESS != "" {
-		addrAgent = envCfg.ADDRESS
+	if envCfg.Address != "" {
+		addrAgent = envCfg.Address
 	}
-	if envCfg.POLL_INTERVAL != 0 {
-		pollInterval = envCfg.POLL_INTERVAL
+	if envCfg.PollInterval != 0 {
+		pollInterval = envCfg.PollInterval
 	}
-	if envCfg.REPORT_INTERVAL != 0 {
-		reportInterval = envCfg.REPORT_INTERVAL
+	if envCfg.ReportInterval != 0 {
+		reportInterval = envCfg.ReportInterval
 	}
 
 	pollDuration := time.Duration(pollInterval) * time.Second
