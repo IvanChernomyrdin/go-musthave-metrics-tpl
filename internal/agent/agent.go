@@ -48,7 +48,6 @@ func (a *Agent) Start(ctx context.Context) error {
 				return nil
 			case <-pollTicker.C:
 				metrics := a.collector.Collect()
-				// log.Printf("Collected %d metrics", len(metrics))
 				mu.Lock()
 				collectedMetrics = metrics
 				mu.Unlock()
@@ -71,12 +70,7 @@ func (a *Agent) Start(ctx context.Context) error {
 					sendCtx, cancelSend := context.WithTimeout(gctx, 5*time.Second)
 					defer cancelSend()
 
-					err := a.sender.SendMetrics(sendCtx, metrics)
-					if err != nil {
-						// log.Printf("Failed to send metrics: %v", err)
-					} else {
-						// log.Printf("Successfully sent metrics to %s", a.config.GetServerURL())
-					}
+					_ = a.sender.SendMetrics(sendCtx, metrics)
 				}
 			}
 		}
