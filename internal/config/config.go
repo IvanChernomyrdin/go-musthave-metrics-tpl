@@ -26,7 +26,7 @@ func Load() *Config {
 	flag.IntVar(&cfg.StoreInterval, "i", 300, "интервал сохранения в секундах")
 	flag.StringVar(&cfg.FileStoragePath, "f", defaultFileStoragePath, "путь к файлу метрик")
 	flag.BoolVar(&cfg.Restore, "r", true, "загружать метрики при запуске")
-	flag.StringVar(&cfg.DatabaseDSN, "d", "", "Database connection string")
+	flag.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "Database connection string")
 	flag.Parse()
 
 	cfg.applyEnv()

@@ -13,38 +13,66 @@ import (
 	db "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config/db"
 	httpserver "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/handler"
 	memory "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/memory"
+	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/postgres"
 	service "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/service"
 )
 
 func main() {
-	//загрузили тут flag и env
 	cfg := config.Load()
 
-	db.Init(cfg.DatabaseDSN)
+	log.Printf("Конфигурация: DatabaseDSN='%s', FileStoragePath='%s'", cfg.DatabaseDSN, cfg.FileStoragePath)
 
-	repo := memory.New()
+	var repo memory.Storage
+	var usePostgreSQL bool
+
+	// Пытаемся использовать PostgreSQL если указан DSN
+	if cfg.DatabaseDSN != "" {
+		log.Printf("Попытка подключения к PostgreSQL: %s", cfg.DatabaseDSN)
+		if err := db.Init(cfg.DatabaseDSN); err != nil {
+			log.Printf("PostgreSQL недоступна: %v", err)
+			repo = memory.New()
+			usePostgreSQL = false
+		} else {
+			repo = postgres.New()
+			usePostgreSQL = true
+			log.Println("Используется PostgreSQL хранилище")
+		}
+	} else {
+		repo = memory.New()
+		usePostgreSQL = false
+		log.Println("Используется memory хранилище")
+	}
+	defer func() {
+		if err := repo.Close(); err != nil {
+			log.Printf("Ошибка при закрытии хранилища: %v", err)
+		}
+	}()
+
 	svc := service.NewMetricsService(repo)
 
-	//если есть загружаем метрики
-	if cfg.Restore {
+	// Загрузка из файла только если НЕ используется PostgreSQL
+	if !usePostgreSQL && cfg.Restore && cfg.FileStoragePath != "" {
+		log.Printf("Загрузка метрик из файла: %s", cfg.FileStoragePath)
 		if err := svc.LoadFromFile(cfg.FileStoragePath); err != nil {
 			log.Printf("Ошибка загрузки метрик: %v", err)
 		}
 	}
+
 	h := httpserver.NewHandler(svc)
 	r := httpserver.NewRouter(h)
 
 	var ticker *time.Ticker
 
-	if cfg.StoreInterval > 0 {
-		// Периодическое сохранение
-		DurationStoreInterval := time.Duration(cfg.StoreInterval) * time.Second      //привели к времени
-		ticker = svc.StartPeriodicSaving(cfg.FileStoragePath, DurationStoreInterval) //выставили тайминги на периоды сохран
-		log.Printf("Периодическое сохранение каждые %d секунд", cfg.StoreInterval)
-	} else {
-		// Синхронное сохранение
-		r = svc.SaveOnUpdateMiddleware(cfg.FileStoragePath)(r)
-		log.Println("Синхронное сохранение включено")
+	// Настройка сохранения в файл только если НЕ используется PostgreSQL
+	if !usePostgreSQL && cfg.FileStoragePath != "" {
+		if cfg.StoreInterval > 0 {
+			DurationStoreInterval := time.Duration(cfg.StoreInterval) * time.Second
+			ticker = svc.StartPeriodicSaving(cfg.FileStoragePath, DurationStoreInterval)
+			log.Printf("Периодическое сохранение каждые %d секунд", cfg.StoreInterval)
+		} else {
+			r = svc.SaveOnUpdateMiddleware(cfg.FileStoragePath)(r)
+			log.Println("Синхронное сохранение включено")
+		}
 	}
 
 	server := &http.Server{
@@ -52,7 +80,7 @@ func main() {
 		Handler: r,
 	}
 
-	// реализация graceful shutdown
+	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -70,9 +98,12 @@ func main() {
 		ticker.Stop()
 	}
 
-	log.Println("Сохранение метрик...")
-	if err := svc.SaveToFile(cfg.FileStoragePath); err != nil {
-		log.Printf("Ошибка сохранения при завершении: %v", err)
+	// Сохранение в файл только если НЕ используется PostgreSQL
+	if !usePostgreSQL && cfg.FileStoragePath != "" {
+		log.Println("Сохранение метрик...")
+		if err := svc.SaveToFile(cfg.FileStoragePath); err != nil {
+			log.Printf("Ошибка сохранения при завершении: %v", err)
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
