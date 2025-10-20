@@ -1,15 +1,35 @@
 package postgres
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config/db"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
+	errPostgres "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/postgres/errors"
 )
 
+type RetryConfig struct {
+	MaxAttempts  int
+	InitialDelay time.Duration
+	MaxDelay     time.Duration
+}
+
+func DefaultRetryConfig() RetryConfig {
+	return RetryConfig{
+		MaxAttempts:  3,
+		InitialDelay: 1 * time.Second,
+		MaxDelay:     5 * time.Second,
+	}
+}
+
 type PostgresStorage struct {
-	db *sql.DB
+	db              *sql.DB
+	retryConfig     RetryConfig
+	errorClassifier *errPostgres.PostgresErrorClassifier
 }
 
 const (
@@ -36,26 +56,61 @@ const (
 
 func New() *PostgresStorage {
 	return &PostgresStorage{
-		db: db.GetDB(),
+		db:              db.GetDB(),
+		retryConfig:     DefaultRetryConfig(),
+		errorClassifier: errPostgres.NewPostgresErrorClassifier(),
 	}
+}
+
+func (p *PostgresStorage) Retry(ctx context.Context, operation func() error) error {
+	delays := []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
+	var lastErr error
+
+	for attempt := 0; attempt < p.retryConfig.MaxAttempts; attempt++ {
+		err := operation()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+
+		// Проверяем, является ли ошибка повторяемой
+		if p.errorClassifier.Classify(err) != errPostgres.Retriable {
+			return fmt.Errorf("неповторяемая ошибка: %w", err)
+		}
+
+		log.Printf("Попытка %d failed, retrying in %v: %v", attempt+1, delays[attempt], err)
+
+		if attempt < len(delays) {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("операция отменена: %w", ctx.Err())
+			case <-time.After(delays[attempt]):
+				// Ждем и переходим к следующей попытке
+			}
+		}
+	}
+
+	return fmt.Errorf("все %d попыток провалены, последняя ошибка: %w", p.retryConfig.MaxAttempts, lastErr)
 }
 
 func (p *PostgresStorage) UpsertGauge(id string, value float64) error {
-	_, err := p.db.Exec(upsertGaugeSQL, id, "gauge", value)
-
-	if err != nil {
-		log.Printf("Ошибка сохранения gauge метрики: %v", err)
-	}
-	return err
+	return p.Retry(context.Background(), func() error {
+		_, err := p.db.Exec(upsertGaugeSQL, id, "gauge", value)
+		if err != nil {
+			log.Printf("Ошибка сохранения gauge метрики: %v", err)
+		}
+		return err
+	})
 }
 
 func (p *PostgresStorage) UpsertCounter(id string, delta int64) error {
-	_, err := p.db.Exec(upsertCounterSQL, id, "counter", delta)
-
-	if err != nil {
-		log.Printf("Ошибка сохранения counter метрики: %v", err)
-	}
-	return err
+	return p.Retry(context.Background(), func() error {
+		_, err := p.db.Exec(upsertCounterSQL, id, "counter", delta)
+		if err != nil {
+			log.Printf("Ошибка сохранения counter метрики: %v", err)
+		}
+		return err
+	})
 }
 
 func (p *PostgresStorage) GetGauge(id string) (float64, bool) {
@@ -148,27 +203,29 @@ func (p *PostgresStorage) Close() error {
 }
 
 func (p *PostgresStorage) UpdateMetricsBatch(metrics []model.Metrics) error {
-	tx, err := p.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
+	return p.Retry(context.Background(), func() error {
+		tx, err := p.db.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
 
-	for _, metric := range metrics {
-		switch metric.MType {
-		case model.Gauge:
-			_, err := tx.Exec(upsertGaugeSQL, metric.ID, "gauge", *metric.Value)
-			if err != nil {
-				return err
-			}
+		for _, metric := range metrics {
+			switch metric.MType {
+			case model.Gauge:
+				_, err := tx.Exec(upsertGaugeSQL, metric.ID, "gauge", *metric.Value)
+				if err != nil {
+					return err
+				}
 
-		case model.Counter:
-			_, err := tx.Exec(upsertCounterSQL, metric.ID, "counter", *metric.Delta)
-			if err != nil {
-				return err
+			case model.Counter:
+				_, err := tx.Exec(upsertCounterSQL, metric.ID, "counter", *metric.Delta)
+				if err != nil {
+					return err
+				}
 			}
 		}
-	}
 
-	return tx.Commit()
+		return tx.Commit()
+	})
 }

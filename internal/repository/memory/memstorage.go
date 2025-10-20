@@ -1,6 +1,10 @@
 package memory
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
+)
 
 type MemStorage struct {
 	mu       sync.RWMutex
@@ -14,6 +18,7 @@ type Storage interface {
 	GetGauge(name string) (float64, bool)
 	GetCounter(name string) (int64, bool)
 	GetAll() (map[string]float64, map[string]int64)
+	UpdateMetricsBatch(metrics []model.Metrics) error
 	Close() error
 }
 
@@ -66,6 +71,24 @@ func (m *MemStorage) GetAll() (map[string]float64, map[string]int64) {
 	}
 
 	return gs, cs
+}
+func (m *MemStorage) UpdateMetricsBatch(metrics []model.Metrics) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, metric := range metrics {
+		switch metric.MType {
+		case model.Gauge:
+			if metric.Value != nil {
+				m.gauges[metric.ID] = *metric.Value
+			}
+		case model.Counter:
+			if metric.Delta != nil {
+				m.counters[metric.ID] += *metric.Delta
+			}
+		}
+	}
+	return nil
 }
 func (m *MemStorage) Close() error {
 	return nil

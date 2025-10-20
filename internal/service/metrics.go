@@ -25,6 +25,7 @@ type MetricsRepo interface {
 	GetGauge(id string) (float64, bool)
 	GetCounter(id string) (int64, bool)
 	GetAll() (map[string]float64, map[string]int64)
+	UpdateMetricsBatch(metrics []model.Metrics) error
 }
 
 type MetricsService struct {
@@ -83,6 +84,10 @@ func (ms *MetricsService) AllText() map[string]string {
 	}
 
 	return out
+}
+
+func (ms *MetricsService) UpdateMetricsBatch(metrics []model.Metrics) error {
+	return ms.repo.UpdateMetricsBatch(metrics)
 }
 
 func (ms *MetricsService) SaveToFile(filename string) error {
