@@ -80,3 +80,8 @@ func NewConfigProvider(t interface {
 
 	return mock
 }
+
+func (m *ConfigProvider) GetHash() string {
+	args := m.Called()
+	return args.String(0)
+}
