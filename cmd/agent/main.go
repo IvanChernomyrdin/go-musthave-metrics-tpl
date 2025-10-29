@@ -11,11 +11,11 @@ import (
 )
 
 func main() {
-	addrAgent, pollDuration, reportDuration := agent.EnvConfigRes()
-	config := agent.NewConfig(addrAgent, pollDuration, reportDuration)
+	addrAgent, pollDuration, reportDuration, hash := agent.EnvConfigRes()
+	config := agent.NewConfig(addrAgent, pollDuration, reportDuration, hash)
 
 	collector := agent.NewRuntimeMetricsCollector()
-	sender := agent.NewHTTPSender(config.GetServerURL())
+	sender := agent.NewHTTPSender(config.GetServerURL(), config.Hash)
 	metricsAgent := agent.NewAgent(collector, sender, config)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -112,9 +115,10 @@ type HTTPSender struct {
 	maxConc         int
 	retryConfig     RetryConfig
 	errorClassifier *HTTPErrorClassifier
+	hashKey         string
 }
 
-func NewHTTPSender(serverURL string) *HTTPSender {
+func NewHTTPSender(serverURL string, hashKey string) *HTTPSender {
 	client := resty.New()
 	client.SetTimeout(10 * time.Second)
 
@@ -124,7 +128,17 @@ func NewHTTPSender(serverURL string) *HTTPSender {
 		maxConc:         max(2, runtime.NumCPU()/2),
 		retryConfig:     DefaultRetryConfig(),
 		errorClassifier: NewHTTPErrorClassifier(),
+		hashKey:         hashKey,
 	}
+}
+
+func (s *HTTPSender) calculateHash256(b []byte) string {
+	if s.hashKey == "" {
+		return ""
+	}
+	h := hmac.New(sha256.New, []byte(s.hashKey))
+	h.Write(b)
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func (s *HTTPSender) Retry(ctx context.Context, operation func() error) error {
@@ -268,12 +282,17 @@ func (s *HTTPSender) sendJSON(ctx context.Context, metric []byte) error {
 	base := strings.TrimRight(s.url, "/")
 	fullURL := base + "/update"
 
-	resp, err := s.client.R().
+	req := s.client.R().
 		SetContext(ctx).
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
-		SetBody(metric).
-		Post(fullURL)
+		SetBody(metric)
+
+	if hash := s.calculateHash256(metric); hash != "" {
+		req.SetHeader("HashSHA256", hash)
+	}
+
+	resp, err := req.Post(fullURL)
 
 	if err != nil {
 		// Классифицируем сетевую ошибку
@@ -312,10 +331,18 @@ func (s *HTTPSender) sendText(ctx context.Context, metric model.Metrics) error {
 	base := strings.TrimRight(s.url, "/")
 	fullURL := base + "/" + path.Join("update", metric.MType, idEscaped, valueStr)
 
-	resp, err := s.client.R().
+	req := s.client.R().
 		SetContext(ctx).
-		SetHeader("Content-Type", "text/plain").
-		Post(fullURL)
+		SetHeader("Content-Type", "text/plain")
+
+	// Для text формата нужно сериализовать данные для хеша
+	textData := fmt.Sprintf("%s:%s:%s", metric.MType, metric.ID, valueStr)
+
+	if hash := s.calculateHash256([]byte(textData)); hash != "" {
+		req.SetHeader("HashSHA256", hash)
+	}
+
+	resp, err := req.Post(fullURL)
 
 	if err != nil {
 		if s.errorClassifier.ClassifyHTTPError(err, 0) == Retriable {
@@ -354,12 +381,17 @@ func (s *HTTPSender) sendBatch(ctx context.Context, metrics []model.Metrics) err
 	base := strings.TrimRight(s.url, "/")
 	fullURL := base + "/updates/"
 
-	resp, err := s.client.R().
+	req := s.client.R().
 		SetContext(ctx).
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
-		SetBody(compressionBuf.Bytes()).
-		Post(fullURL)
+		SetBody(compressionBuf.Bytes())
+
+	if hash := s.calculateHash256(compressionBuf.Bytes()); hash != "" {
+		req.SetHeader("HashSHA256", hash)
+	}
+
+	resp, err := req.Post(fullURL)
 
 	if err != nil {
 		if s.errorClassifier.ClassifyHTTPError(err, 0) == Retriable {
