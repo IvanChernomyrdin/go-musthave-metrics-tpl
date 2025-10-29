@@ -30,4 +30,5 @@ type ConfigProvider interface {
 	GetServerURL() string
 	GetPollInterval() time.Duration
 	GetReportInterval() time.Duration
+	GetHash() string
 }

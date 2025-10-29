@@ -15,7 +15,7 @@ func main() {
 	config := agent.NewConfig(addrAgent, pollDuration, reportDuration, hash)
 
 	collector := agent.NewRuntimeMetricsCollector()
-	sender := agent.NewHTTPSender(config.GetServerURL(), hash)
+	sender := agent.NewHTTPSender(config.GetServerURL(), config.GetHash())
 	metricsAgent := agent.NewAgent(collector, sender, config)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
