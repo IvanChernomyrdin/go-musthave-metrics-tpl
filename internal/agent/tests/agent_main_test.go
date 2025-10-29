@@ -13,20 +13,20 @@ import (
 
 func TestMainComponentsIntegration(t *testing.T) {
 	t.Run("main components creation and startup", func(t *testing.T) {
-		addrAgent, pollDuration, reportDuration := agent.EnvConfigRes()
+		addrAgent, pollDuration, reportDuration, hash := agent.EnvConfigRes()
 
 		assert.NotEmpty(t, addrAgent)
 		assert.Greater(t, pollDuration, time.Duration(0))
 		assert.Greater(t, reportDuration, time.Duration(0))
 
-		config := agent.NewConfig(addrAgent, pollDuration, reportDuration)
+		config := agent.NewConfig(addrAgent, pollDuration, reportDuration, hash)
 		require.NotNil(t, config)
 		assert.Contains(t, config.GetServerURL(), "http://")
 
 		collector := agent.NewRuntimeMetricsCollector()
 		require.NotNil(t, collector)
 
-		sender := agent.NewHTTPSender(config.GetServerURL())
+		sender := agent.NewHTTPSender(config.GetServerURL(), "")
 		require.NotNil(t, sender)
 
 		metricsAgent := agent.NewAgent(collector, sender, config)
@@ -45,26 +45,29 @@ func TestMainComponentsIntegration(t *testing.T) {
 			addr   string
 			poll   time.Duration
 			report time.Duration
+			hash   string
 		}{
 			{
 				name:   "default config",
 				addr:   "localhost:8080",
 				poll:   2 * time.Second,
 				report: 10 * time.Second,
+				hash:   "",
 			},
 			{
 				name:   "fast intervals",
 				addr:   "127.0.0.1:9090",
 				poll:   100 * time.Millisecond,
 				report: 500 * time.Millisecond,
+				hash:   "",
 			},
 		}
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				config := agent.NewConfig(tc.addr, tc.poll, tc.report)
+				config := agent.NewConfig(tc.addr, tc.poll, tc.report, tc.hash)
 				collector := agent.NewRuntimeMetricsCollector()
-				sender := agent.NewHTTPSender(config.GetServerURL())
+				sender := agent.NewHTTPSender(config.GetServerURL(), tc.hash)
 				agent := agent.NewAgent(collector, sender, config)
 
 				require.NotNil(t, agent)
@@ -82,9 +85,9 @@ func TestMainComponentsIntegration(t *testing.T) {
 func TestMainErrorScenarios(t *testing.T) {
 	t.Run("agent handles send errors gracefully", func(t *testing.T) {
 		// Агент должен продолжать работу при ошибках сети
-		config := agent.NewConfig("invalid-server:9999", 50*time.Millisecond, 100*time.Millisecond)
+		config := agent.NewConfig("invalid-server:9999", 50*time.Millisecond, 100*time.Millisecond, "")
 		collector := agent.NewRuntimeMetricsCollector()
-		sender := agent.NewHTTPSender(config.GetServerURL())
+		sender := agent.NewHTTPSender(config.GetServerURL(), "")
 		agent := agent.NewAgent(collector, sender, config)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
@@ -95,9 +98,9 @@ func TestMainErrorScenarios(t *testing.T) {
 	})
 
 	t.Run("immediate context cancellation", func(t *testing.T) {
-		config := agent.NewConfig("localhost:8080", 1*time.Second, 2*time.Second)
+		config := agent.NewConfig("localhost:8080", 1*time.Second, 2*time.Second, "")
 		collector := agent.NewRuntimeMetricsCollector()
-		sender := agent.NewHTTPSender(config.GetServerURL())
+		sender := agent.NewHTTPSender(config.GetServerURL(), "")
 		agent := agent.NewAgent(collector, sender, config)
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -127,7 +130,7 @@ func TestMainWithEnvironment(t *testing.T) {
 		os.Setenv("REPORT_INTERVAL", "12")
 
 		// Вместо вызова EnvConfigRes, тестируем создание конфига напрямую
-		config := agent.NewConfig("test-env:8080", 3*time.Second, 12*time.Second)
+		config := agent.NewConfig("test-env:8080", 3*time.Second, 12*time.Second, "")
 		assert.Equal(t, "http://test-env:8080", config.GetServerURL())
 		assert.Equal(t, 3*time.Second, config.GetPollInterval())
 		assert.Equal(t, 12*time.Second, config.GetReportInterval())
