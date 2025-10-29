@@ -12,7 +12,6 @@ type Config struct {
 	ServerURL      string
 	PollInterval   time.Duration
 	ReportInterval time.Duration
-	Hash           string
 }
 
 type EnvConfig struct {
@@ -63,14 +62,12 @@ func NewConfig(addrAgent string, pollInterval time.Duration, reportInterval time
 		ServerURL:      "http://" + addrAgent,
 		PollInterval:   pollInterval,
 		ReportInterval: reportInterval,
-		Hash:           hash,
 	}
 
 	return &Config{
 		ServerURL:      def.ServerURL,
 		PollInterval:   def.PollInterval,
 		ReportInterval: def.ReportInterval,
-		Hash:           hash,
 	}
 }
 
