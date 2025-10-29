@@ -67,7 +67,7 @@ func (h *HashMiddleware) AddHash(next http.Handler) http.Handler {
 		}
 		//перехватываем
 		addRes := &addResponseWriter{ResponseWriter: w}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(addRes, r)
 
 		//вычисляем
 		if len(addRes.body) > 0 {
