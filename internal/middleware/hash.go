@@ -35,8 +35,8 @@ func (h *HashMiddleware) CheckHash(next http.Handler) http.Handler {
 				}
 				r.Body = io.NopCloser(bytes.NewBuffer(body))
 				//используем тело для получаения sha256
-				computerHash := h.computeHash(body)
-				if !hmac.Equal([]byte(incomingHash), []byte(computerHash)) {
+				computedHash := h.computeHash(body)
+				if !hmac.Equal([]byte(incomingHash), []byte(computedHash)) {
 					http.Error(w, "Invalid hash sum", http.StatusBadRequest)
 					return
 				}
