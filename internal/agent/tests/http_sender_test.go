@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -277,9 +278,14 @@ func TestIsRetriableError(t *testing.T) {
 
 func TestHTTPSender_Concurrent(t *testing.T) {
 	t.Run("concurrent send metrics", func(t *testing.T) {
-		requestCount := 0
+		var (
+			requestCount int
+			mu           sync.Mutex
+		)
 		server := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
 			requestCount++
+			mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 		})
 
@@ -306,7 +312,11 @@ func TestHTTPSender_Concurrent(t *testing.T) {
 			assert.NoError(t, err)
 		}
 
-		assert.Equal(t, goroutines, requestCount)
+		mu.Lock()
+		finalCount := requestCount
+		mu.Unlock()
+
+		assert.Equal(t, goroutines, finalCount)
 	})
 }
 
