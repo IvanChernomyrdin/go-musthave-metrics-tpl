@@ -51,6 +51,7 @@ func TestAgentStart(t *testing.T) {
 		collector.On("Collect").Return(metrics)
 		config.On("GetPollInterval").Return(30 * time.Millisecond)
 		config.On("GetReportInterval").Return(60 * time.Millisecond)
+		config.On("GetHash").Return("").Maybe()
 		sender.On("SendMetrics", mock.Anything, metrics).Return(nil)
 
 		agent := agentProd.NewAgent(collector, sender, config)

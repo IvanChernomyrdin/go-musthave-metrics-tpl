@@ -121,6 +121,7 @@ func TestNewConfig(t *testing.T) {
 		pollInterval   time.Duration
 		reportInterval time.Duration
 		expectedURL    string
+		hash           string
 	}{
 		{
 			name:           "basic config",
@@ -128,6 +129,7 @@ func TestNewConfig(t *testing.T) {
 			pollInterval:   2 * time.Second,
 			reportInterval: 10 * time.Second,
 			expectedURL:    "http://localhost:8080",
+			hash:           "",
 		},
 		{
 			name:           "custom address",
@@ -135,12 +137,13 @@ func TestNewConfig(t *testing.T) {
 			pollInterval:   5 * time.Second,
 			reportInterval: 15 * time.Second,
 			expectedURL:    "http://example.com:9090",
+			hash:           "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := agent.NewConfig(tt.addrAgent, tt.pollInterval, tt.reportInterval)
+			config := agent.NewConfig(tt.addrAgent, tt.pollInterval, tt.reportInterval, tt.hash)
 
 			require.NotNil(t, config)
 			assert.Equal(t, tt.expectedURL, config.GetServerURL())

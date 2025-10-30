@@ -20,8 +20,6 @@ import (
 func main() {
 	cfg := config.Load()
 
-	log.Printf("Конфигурация: DatabaseDSN='%s', FileStoragePath='%s'", cfg.DatabaseDSN, cfg.FileStoragePath)
-
 	var repo memory.Storage
 	var usePostgreSQL bool
 
@@ -59,7 +57,7 @@ func main() {
 	}
 
 	h := httpserver.NewHandler(svc)
-	r := httpserver.NewRouter(h)
+	r := httpserver.NewRouter(h, cfg.HashKey)
 
 	var ticker *time.Ticker
 
