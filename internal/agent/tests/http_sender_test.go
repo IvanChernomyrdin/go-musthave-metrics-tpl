@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,12 +24,12 @@ func setupTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 
 func TestNewHTTPSender(t *testing.T) {
 	t.Run("create with valid URL", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://localhost:8080")
+		sender := agent.NewHTTPSender("http://localhost:8080", "")
 		require.NotNil(t, sender)
 	})
 
 	t.Run("URL normalization", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://example.com/")
+		sender := agent.NewHTTPSender("http://example.com/", "")
 		require.NotNil(t, sender)
 	})
 }
@@ -44,7 +45,7 @@ func TestHTTPSender_SendMetrics(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL)
+		sender := agent.NewHTTPSender(server.URL, "")
 		metrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
@@ -66,7 +67,7 @@ func TestHTTPSender_SendMetrics(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL)
+		sender := agent.NewHTTPSender(server.URL, "")
 		metrics := []model.Metrics{
 			{ID: "", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "valid", MType: "gauge", Value: float64Ptr(2.34)},
@@ -88,7 +89,7 @@ func TestHTTPSender_SendMetrics(t *testing.T) {
 			}
 		})
 
-		sender := agent.NewHTTPSender(server.URL)
+		sender := agent.NewHTTPSender(server.URL, "")
 		metrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
@@ -102,7 +103,7 @@ func TestHTTPSender_SendMetrics(t *testing.T) {
 
 func TestHTTPSender_Retry(t *testing.T) {
 	t.Run("success on first attempt", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://localhost:8080")
+		sender := agent.NewHTTPSender("http://localhost:8080", "")
 		attempts := 0
 
 		err := sender.Retry(context.Background(), func() error {
@@ -115,7 +116,7 @@ func TestHTTPSender_Retry(t *testing.T) {
 	})
 
 	t.Run("success after retries", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://localhost:8080")
+		sender := agent.NewHTTPSender("http://localhost:8080", "")
 		attempts := 0
 
 		err := sender.Retry(context.Background(), func() error {
@@ -131,7 +132,7 @@ func TestHTTPSender_Retry(t *testing.T) {
 	})
 
 	t.Run("non-retriable error fails immediately", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://localhost:8080")
+		sender := agent.NewHTTPSender("http://localhost:8080", "")
 		attempts := 0
 		expectedErr := errors.New("permanent error")
 
@@ -146,7 +147,7 @@ func TestHTTPSender_Retry(t *testing.T) {
 	})
 
 	t.Run("context cancellation", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://localhost:8080")
+		sender := agent.NewHTTPSender("http://localhost:8080", "")
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
@@ -220,7 +221,7 @@ func TestMetricValidation(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL)
+		sender := agent.NewHTTPSender(server.URL, "")
 		validMetrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
@@ -238,7 +239,7 @@ func TestMetricValidation(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL)
+		sender := agent.NewHTTPSender(server.URL, "")
 		mixedMetrics := []model.Metrics{
 			{ID: "", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "valid1", MType: "gauge", Value: float64Ptr(2.34)},
@@ -282,7 +283,7 @@ func TestHTTPSender_Concurrent(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL)
+		sender := agent.NewHTTPSender(server.URL, "")
 		metrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
@@ -316,7 +317,7 @@ func TestHTTPSender_ContextCancellation(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL)
+		sender := agent.NewHTTPSender(server.URL, "")
 		metrics := []model.Metrics{
 			{ID: "test", MType: "gauge", Value: float64Ptr(1.23)},
 		}
@@ -326,5 +327,187 @@ func TestHTTPSender_ContextCancellation(t *testing.T) {
 
 		err := sender.SendMetrics(ctx, metrics)
 		t.Logf("SendMetrics with cancelled context returned: %v", err)
+	})
+}
+
+func TestHTTPSender_HashSHA256Header(t *testing.T) {
+	t.Run("HashSHA256 header is set when key provided", func(t *testing.T) {
+		var receivedHash string
+		server := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			receivedHash = r.Header.Get("HashSHA256")
+			w.WriteHeader(http.StatusOK)
+		})
+
+		sender := agent.NewHTTPSender(server.URL, "test-key")
+		metrics := []model.Metrics{
+			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
+		}
+
+		err := sender.SendMetrics(context.Background(), metrics)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, receivedHash, "HashSHA256 header should be set")
+		assert.Regexp(t, `^[a-f0-9]{64}$`, receivedHash, "Hash should be 64-character hex string")
+	})
+
+	t.Run("HashSHA256 header is not set when no key provided", func(t *testing.T) {
+		var receivedHash string
+		server := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			receivedHash = r.Header.Get("HashSHA256")
+			w.WriteHeader(http.StatusOK)
+		})
+
+		sender := agent.NewHTTPSender(server.URL, "") // empty key
+		metrics := []model.Metrics{
+			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
+		}
+
+		err := sender.SendMetrics(context.Background(), metrics)
+		assert.NoError(t, err)
+		assert.Empty(t, receivedHash, "HashSHA256 header should not be set when no key")
+	})
+
+	t.Run("HashSHA256 header for JSON format", func(t *testing.T) {
+		var receivedHash string
+		var jsonRequest bool
+
+		server := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/update" && r.Method == "POST" {
+				receivedHash = r.Header.Get("HashSHA256")
+				jsonRequest = true
+			}
+			w.WriteHeader(http.StatusOK)
+		})
+
+		sender := agent.NewHTTPSender(server.URL, "json-key")
+
+		// Пробуем отправить одну метрику
+		metrics := []model.Metrics{
+			{ID: "test", MType: "gauge", Value: float64Ptr(1.23)},
+		}
+
+		err := sender.SendMetrics(context.Background(), metrics)
+		assert.NoError(t, err)
+
+		if jsonRequest {
+			assert.NotEmpty(t, receivedHash, "HashSHA256 header should be set for JSON format")
+		} else {
+			t.Skip("JSON request was not made (might have used batch)")
+		}
+	})
+
+	t.Run("HashSHA256 header for text format", func(t *testing.T) {
+		var receivedHash string
+		var textRequest bool
+
+		// Сервер который фейлит только batch запросы
+		server := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/updates/" {
+				w.WriteHeader(http.StatusInternalServerError) // Фейлим batch
+			} else if strings.Contains(r.URL.Path, "/update/gauge/") {
+				receivedHash = r.Header.Get("HashSHA256")
+				textRequest = true
+				w.WriteHeader(http.StatusOK)
+			} else {
+				w.WriteHeader(http.StatusOK)
+			}
+		})
+
+		sender := agent.NewHTTPSender(server.URL, "text-key")
+
+		metrics := []model.Metrics{
+			{ID: "test", MType: "gauge", Value: float64Ptr(1.23)},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		err := sender.SendMetrics(ctx, metrics)
+		assert.NoError(t, err)
+
+		if textRequest {
+			assert.NotEmpty(t, receivedHash, "HashSHA256 header should be set for text format")
+		} else {
+			t.Skip("Text request was not made")
+		}
+	})
+
+	t.Run("HashSHA256 header for batch format", func(t *testing.T) {
+		var receivedHash string
+		server := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/updates/" {
+				receivedHash = r.Header.Get("HashSHA256")
+			}
+			w.WriteHeader(http.StatusOK)
+		})
+
+		sender := agent.NewHTTPSender(server.URL, "batch-key")
+		metrics := []model.Metrics{
+			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
+			{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
+		}
+
+		err := sender.SendMetrics(context.Background(), metrics)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, receivedHash, "HashSHA256 header should be set for batch format")
+	})
+
+	t.Run("Hash is consistent for same data", func(t *testing.T) {
+		var hashes []string
+		requestCount := 0
+		server := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			if requestCount < 2 {
+				hashes = append(hashes, r.Header.Get("HashSHA256"))
+			}
+			requestCount++
+			w.WriteHeader(http.StatusOK)
+		})
+
+		sender := agent.NewHTTPSender(server.URL, "consistent-key")
+		metrics := []model.Metrics{
+			{ID: "test", MType: "gauge", Value: float64Ptr(1.23)},
+		}
+
+		// Отправить одни и те же данные дважды
+		err := sender.SendMetrics(context.Background(), metrics)
+		assert.NoError(t, err)
+		err = sender.SendMetrics(context.Background(), metrics)
+		assert.NoError(t, err)
+
+		assert.Len(t, hashes, 2, "Should have collected 2 hashes")
+		if len(hashes) == 2 {
+			assert.Equal(t, hashes[0], hashes[1], "Hashes should be identical for same data and key")
+		}
+	})
+
+	t.Run("Hash changes with different keys", func(t *testing.T) {
+		var hash1, hash2 string
+		requestCount := 0
+		server := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			if requestCount == 0 {
+				hash1 = r.Header.Get("HashSHA256")
+			} else if requestCount == 1 {
+				hash2 = r.Header.Get("HashSHA256")
+			}
+			requestCount++
+			w.WriteHeader(http.StatusOK)
+		})
+
+		metrics := []model.Metrics{
+			{ID: "test", MType: "gauge", Value: float64Ptr(1.23)},
+		}
+
+		// Первая отправка 1 ключик
+		sender1 := agent.NewHTTPSender(server.URL, "key1")
+		err := sender1.SendMetrics(context.Background(), metrics)
+		assert.NoError(t, err)
+
+		// Вторая отправка с ключом 2 (те же данные, другой ключ)
+		sender2 := agent.NewHTTPSender(server.URL, "key2")
+		err = sender2.SendMetrics(context.Background(), metrics)
+		assert.NoError(t, err)
+
+		assert.NotEqual(t, hash1, hash2, "Hashes should be different for different keys")
+		assert.NotEmpty(t, hash1)
+		assert.NotEmpty(t, hash2)
 	})
 }

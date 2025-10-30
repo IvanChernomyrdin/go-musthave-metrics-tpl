@@ -15,6 +15,7 @@ type Config struct {
 	FileStoragePath string
 	Restore         bool
 	DatabaseDSN     string
+	HashKey         string
 }
 
 func Load() *Config {
@@ -27,6 +28,7 @@ func Load() *Config {
 	flag.StringVar(&cfg.FileStoragePath, "f", defaultFileStoragePath, "путь к файлу метрик")
 	flag.BoolVar(&cfg.Restore, "r", true, "загружать метрики при запуске")
 	flag.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "Database connection string")
+	flag.StringVar(&cfg.HashKey, "k", "", "ключ подписики по алгоритму sha256")
 	flag.Parse()
 
 	cfg.applyEnv()
@@ -53,6 +55,9 @@ func (cfg *Config) applyEnv() {
 	}
 	if envDSN := os.Getenv("DATABASE_DSN"); envDSN != "" {
 		cfg.DatabaseDSN = envDSN
+	}
+	if envHashKey := os.Getenv("KEY"); envHashKey != "" {
+		cfg.HashKey = envHashKey
 	}
 }
 

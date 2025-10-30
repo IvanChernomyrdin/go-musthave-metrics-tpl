@@ -13,6 +13,59 @@ type ConfigProvider struct {
 	mock.Mock
 }
 
+type ConfigProvider_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *ConfigProvider) EXPECT() *ConfigProvider_Expecter {
+	return &ConfigProvider_Expecter{mock: &_m.Mock}
+}
+
+// GetHash provides a mock function with no fields
+func (_m *ConfigProvider) GetHash() string {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetHash")
+	}
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	return r0
+}
+
+// ConfigProvider_GetHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetHash'
+type ConfigProvider_GetHash_Call struct {
+	*mock.Call
+}
+
+// GetHash is a helper method to define mock.On call
+func (_e *ConfigProvider_Expecter) GetHash() *ConfigProvider_GetHash_Call {
+	return &ConfigProvider_GetHash_Call{Call: _e.mock.On("GetHash")}
+}
+
+func (_c *ConfigProvider_GetHash_Call) Run(run func()) *ConfigProvider_GetHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *ConfigProvider_GetHash_Call) Return(_a0 string) *ConfigProvider_GetHash_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ConfigProvider_GetHash_Call) RunAndReturn(run func() string) *ConfigProvider_GetHash_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetPollInterval provides a mock function with no fields
 func (_m *ConfigProvider) GetPollInterval() time.Duration {
 	ret := _m.Called()
@@ -29,6 +82,33 @@ func (_m *ConfigProvider) GetPollInterval() time.Duration {
 	}
 
 	return r0
+}
+
+// ConfigProvider_GetPollInterval_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPollInterval'
+type ConfigProvider_GetPollInterval_Call struct {
+	*mock.Call
+}
+
+// GetPollInterval is a helper method to define mock.On call
+func (_e *ConfigProvider_Expecter) GetPollInterval() *ConfigProvider_GetPollInterval_Call {
+	return &ConfigProvider_GetPollInterval_Call{Call: _e.mock.On("GetPollInterval")}
+}
+
+func (_c *ConfigProvider_GetPollInterval_Call) Run(run func()) *ConfigProvider_GetPollInterval_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *ConfigProvider_GetPollInterval_Call) Return(_a0 time.Duration) *ConfigProvider_GetPollInterval_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ConfigProvider_GetPollInterval_Call) RunAndReturn(run func() time.Duration) *ConfigProvider_GetPollInterval_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetReportInterval provides a mock function with no fields
@@ -49,6 +129,33 @@ func (_m *ConfigProvider) GetReportInterval() time.Duration {
 	return r0
 }
 
+// ConfigProvider_GetReportInterval_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetReportInterval'
+type ConfigProvider_GetReportInterval_Call struct {
+	*mock.Call
+}
+
+// GetReportInterval is a helper method to define mock.On call
+func (_e *ConfigProvider_Expecter) GetReportInterval() *ConfigProvider_GetReportInterval_Call {
+	return &ConfigProvider_GetReportInterval_Call{Call: _e.mock.On("GetReportInterval")}
+}
+
+func (_c *ConfigProvider_GetReportInterval_Call) Run(run func()) *ConfigProvider_GetReportInterval_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *ConfigProvider_GetReportInterval_Call) Return(_a0 time.Duration) *ConfigProvider_GetReportInterval_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ConfigProvider_GetReportInterval_Call) RunAndReturn(run func() time.Duration) *ConfigProvider_GetReportInterval_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetServerURL provides a mock function with no fields
 func (_m *ConfigProvider) GetServerURL() string {
 	ret := _m.Called()
@@ -65,6 +172,33 @@ func (_m *ConfigProvider) GetServerURL() string {
 	}
 
 	return r0
+}
+
+// ConfigProvider_GetServerURL_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetServerURL'
+type ConfigProvider_GetServerURL_Call struct {
+	*mock.Call
+}
+
+// GetServerURL is a helper method to define mock.On call
+func (_e *ConfigProvider_Expecter) GetServerURL() *ConfigProvider_GetServerURL_Call {
+	return &ConfigProvider_GetServerURL_Call{Call: _e.mock.On("GetServerURL")}
+}
+
+func (_c *ConfigProvider_GetServerURL_Call) Run(run func()) *ConfigProvider_GetServerURL_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *ConfigProvider_GetServerURL_Call) Return(_a0 string) *ConfigProvider_GetServerURL_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *ConfigProvider_GetServerURL_Call) RunAndReturn(run func() string) *ConfigProvider_GetServerURL_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // NewConfigProvider creates a new instance of ConfigProvider. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
