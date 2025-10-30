@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"log"
 	"net/http"
 )
 
@@ -39,6 +40,7 @@ func (h *HashMiddleware) CheckHash(next http.Handler) http.Handler {
 				if !hmac.Equal([]byte(incomingHash), []byte(computedHash)) {
 					// http.Error(w, "Invalid hash sum", http.StatusBadRequest)
 					// return
+					log.Printf("Хэши не сходятся: incoming=%s, computed=%s", incomingHash, computedHash)
 				}
 			}
 		}
