@@ -20,6 +20,7 @@ type Metrics struct {
 
 type MetricsCollector interface {
 	Collect() []Metrics
+	CollectSystemMetrics() []Metrics
 }
 
 type MetricsSender interface {
@@ -31,4 +32,5 @@ type ConfigProvider interface {
 	GetPollInterval() time.Duration
 	GetReportInterval() time.Duration
 	GetHash() string
+	GetRateLimit() int
 }

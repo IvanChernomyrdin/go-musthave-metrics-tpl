@@ -43,16 +43,25 @@ func TestAgentStart(t *testing.T) {
 		sender := mocks.NewMetricsSender(t)
 		config := mocks.NewConfigProvider(t)
 
-		metrics := []model.Metrics{
+		runtimeMetrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
 		}
+		systemMetrics := []model.Metrics{
+			{ID: "TotalMemory", MType: "gauge", Value: float64Ptr(1024)},
+			{ID: "FreeMemory", MType: "gauge", Value: float64Ptr(512)},
+		}
 
-		collector.On("Collect").Return(metrics)
+		// Настраиваем множественные вызовы (агент работает в цикле)
+		collector.On("Collect").Return(runtimeMetrics).Maybe()
+		collector.On("CollectSystemMetrics").Return(systemMetrics).Maybe()
 		config.On("GetPollInterval").Return(30 * time.Millisecond)
 		config.On("GetReportInterval").Return(60 * time.Millisecond)
 		config.On("GetHash").Return("").Maybe()
-		sender.On("SendMetrics", mock.Anything, metrics).Return(nil)
+		config.On("GetRateLimit").Return(3)
+
+		// Ожидаем любые метрики
+		sender.On("SendMetrics", mock.Anything, mock.AnythingOfType("[]model.Metrics")).Return(nil).Maybe()
 
 		agent := agentProd.NewAgent(collector, sender, config)
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -61,8 +70,10 @@ func TestAgentStart(t *testing.T) {
 		err := agent.Start(ctx)
 
 		assert.NoError(t, err)
-		assert.GreaterOrEqual(t, len(collector.Calls), 1, "Collect should be called at least once")
-		assert.GreaterOrEqual(t, len(sender.Calls), 1, "SendMetrics should be called at least once")
+		// Проверяем что методы вызывались хотя бы один раз
+		collector.AssertCalled(t, "Collect")
+		collector.AssertCalled(t, "CollectSystemMetrics")
+		sender.AssertCalled(t, "SendMetrics", mock.Anything, mock.AnythingOfType("[]model.Metrics"))
 	})
 
 	t.Run("empty metrics collection", func(t *testing.T) {
@@ -71,10 +82,13 @@ func TestAgentStart(t *testing.T) {
 		config := mocks.NewConfigProvider(t)
 
 		emptyMetrics := []model.Metrics{}
+		systemMetrics := []model.Metrics{}
 
-		collector.On("Collect").Return(emptyMetrics)
+		collector.On("Collect").Return(emptyMetrics).Maybe()
+		collector.On("CollectSystemMetrics").Return(systemMetrics).Maybe()
 		config.On("GetPollInterval").Return(30 * time.Millisecond)
 		config.On("GetReportInterval").Return(60 * time.Millisecond)
+		config.On("GetRateLimit").Return(3)
 
 		agent := agentProd.NewAgent(collector, sender, config)
 		ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
@@ -83,6 +97,7 @@ func TestAgentStart(t *testing.T) {
 		err := agent.Start(ctx)
 
 		assert.NoError(t, err)
+		// При пустых метриках отправка не должна вызываться
 		sender.AssertNotCalled(t, "SendMetrics", mock.Anything, mock.Anything)
 	})
 
@@ -93,6 +108,7 @@ func TestAgentStart(t *testing.T) {
 
 		config.On("GetPollInterval").Return(100 * time.Millisecond)
 		config.On("GetReportInterval").Return(200 * time.Millisecond)
+		config.On("GetRateLimit").Return(3)
 
 		agent := agentProd.NewAgent(collector, sender, config)
 		ctx, cancel := context.WithCancel(context.Background())
@@ -102,6 +118,7 @@ func TestAgentStart(t *testing.T) {
 
 		assert.NoError(t, err)
 		collector.AssertNotCalled(t, "Collect")
+		collector.AssertNotCalled(t, "CollectSystemMetrics")
 		sender.AssertNotCalled(t, "SendMetrics", mock.Anything, mock.Anything)
 	})
 
@@ -110,14 +127,19 @@ func TestAgentStart(t *testing.T) {
 		sender := mocks.NewMetricsSender(t)
 		config := mocks.NewConfigProvider(t)
 
-		metrics := []model.Metrics{
+		runtimeMetrics := []model.Metrics{
 			{ID: "failing", MType: "counter", Delta: int64Ptr(1)},
 		}
+		systemMetrics := []model.Metrics{}
 
-		collector.On("Collect").Return(metrics)
+		collector.On("Collect").Return(runtimeMetrics).Maybe()
+		collector.On("CollectSystemMetrics").Return(systemMetrics).Maybe()
 		config.On("GetPollInterval").Return(50 * time.Millisecond)
 		config.On("GetReportInterval").Return(100 * time.Millisecond)
-		sender.On("SendMetrics", mock.Anything, metrics).Return(errors.New("network error"))
+		config.On("GetRateLimit").Return(3)
+
+		// Ожидаем ошибку при отправке
+		sender.On("SendMetrics", mock.Anything, mock.AnythingOfType("[]model.Metrics")).Return(errors.New("network error")).Maybe()
 
 		agent := agentProd.NewAgent(collector, sender, config)
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
@@ -126,7 +148,7 @@ func TestAgentStart(t *testing.T) {
 		err := agent.Start(ctx)
 
 		assert.NoError(t, err)
-		assert.GreaterOrEqual(t, len(sender.Calls), 1, "SendMetrics should be called at least once")
+		sender.AssertCalled(t, "SendMetrics", mock.Anything, mock.AnythingOfType("[]model.Metrics"))
 	})
 }
 
@@ -135,6 +157,8 @@ func TestAgent_BasicFunctionality(t *testing.T) {
 		collector := mocks.NewMetricsCollector(t)
 		sender := mocks.NewMetricsSender(t)
 		config := mocks.NewConfigProvider(t)
+
+		config.On("GetRateLimit").Return(3)
 
 		agent := agentProd.NewAgent(collector, sender, config)
 		assert.NotNil(t, agent)

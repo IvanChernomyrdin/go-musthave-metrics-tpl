@@ -32,6 +32,26 @@ func (_m *MetricsCollector) Collect() []model.Metrics {
 	return r0
 }
 
+// CollectSystemMetrics provides a mock function with no fields
+func (_m *MetricsCollector) CollectSystemMetrics() []model.Metrics {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for CollectSystemMetrics")
+	}
+
+	var r0 []model.Metrics
+	if rf, ok := ret.Get(0).(func() []model.Metrics); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]model.Metrics)
+		}
+	}
+
+	return r0
+}
+
 // NewMetricsCollector creates a new instance of MetricsCollector. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMetricsCollector(t interface {

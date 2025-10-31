@@ -1,11 +1,15 @@
 package agent
 
 import (
+	"fmt"
 	"math/rand"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 type RuntimeMetricsCollector struct {
@@ -83,6 +87,34 @@ func (rmc *RuntimeMetricsCollector) Collect() []model.Metrics {
 	// Дополнительные метрики
 	addCounter("PollCount", rmc.pollCount)
 	addGauge("RandomValue", rand.Float64())
+
+	return metrics
+}
+
+// Сбор системных метрик через gopsutil
+func (rmc *RuntimeMetricsCollector) CollectSystemMetrics() []model.Metrics {
+	metrics := make([]model.Metrics, 0, 10)
+
+	addGauge := func(id string, value float64) {
+		val := value
+		metrics = append(metrics, model.Metrics{
+			ID:    id,
+			MType: model.Gauge,
+			Value: &val,
+			Hash:  "",
+		})
+	}
+
+	if vmStat, err := mem.VirtualMemory(); err == nil {
+		addGauge("TotalMemory", float64(vmStat.Total))
+		addGauge("FreeMemory", float64(vmStat.Free))
+	}
+
+	if cpuPercent, err := cpu.Percent(500*time.Millisecond, true); err == nil {
+		for i, usage := range cpuPercent {
+			addGauge(fmt.Sprintf("CPUutilization%d", i+1), usage)
+		}
+	}
 
 	return metrics
 }

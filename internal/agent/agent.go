@@ -17,6 +17,7 @@ type Agent struct {
 	collector model.MetricsCollector
 	sender    model.MetricsSender
 	config    model.ConfigProvider
+	rateLimit int
 }
 
 func NewAgent(collector model.MetricsCollector, sender model.MetricsSender, config model.ConfigProvider) *Agent {
@@ -24,6 +25,7 @@ func NewAgent(collector model.MetricsCollector, sender model.MetricsSender, conf
 		collector: collector,
 		sender:    sender,
 		config:    config,
+		rateLimit: config.GetRateLimit(),
 	}
 }
 
@@ -34,12 +36,15 @@ func (a *Agent) Start(ctx context.Context) error {
 	g, gctx := errgroup.WithContext(ctx)
 
 	pollTicker := time.NewTicker(a.config.GetPollInterval())
-	reportticker := time.NewTicker(a.config.GetReportInterval())
+	reportTicker := time.NewTicker(a.config.GetReportInterval())
 	defer pollTicker.Stop()
-	defer reportticker.Stop()
+	defer reportTicker.Stop()
 
 	var collectedMetrics []model.Metrics
 	var mu sync.RWMutex
+
+	// Канал для отправки метрик с буфером по rate limit
+	metricsCh := make(chan []model.Metrics, a.rateLimit*2)
 
 	g.Go(func() error {
 		defer pollTicker.Stop()
@@ -50,67 +55,119 @@ func (a *Agent) Start(ctx context.Context) error {
 			case <-pollTicker.C:
 				metrics := a.collector.Collect()
 				mu.Lock()
-				collectedMetrics = metrics
+				collectedMetrics = append(collectedMetrics, metrics...)
 				mu.Unlock()
 			}
 		}
 	})
 
+	// 2. Горутина сбора системных метрик (gopsutil)
 	g.Go(func() error {
-		defer reportticker.Stop()
+		systemTicker := time.NewTicker(a.config.GetPollInterval())
+		defer systemTicker.Stop()
+
 		for {
 			select {
 			case <-gctx.Done():
 				return nil
-			case <-reportticker.C:
+			case <-systemTicker.C:
+				systemMetrics := a.collector.CollectSystemMetrics()
+				mu.Lock()
+				collectedMetrics = append(collectedMetrics, systemMetrics...)
+				mu.Unlock()
+			}
+		}
+	})
+
+	// 3. Worker pool для отправки с rate limit
+	for i := 0; i < a.rateLimit; i++ {
+		g.Go(func() error {
+			return a.reportWorker(gctx, metricsCh)
+		})
+	}
+
+	// 4. Горутина-диспетчер, которая отправляет метрики в worker pool
+	g.Go(func() error {
+		defer reportTicker.Stop()
+		defer close(metricsCh)
+
+		for {
+			select {
+			case <-gctx.Done():
+				return nil
+			case <-reportTicker.C:
 				mu.RLock()
-				metrics := collectedMetrics
+				metrics := make([]model.Metrics, len(collectedMetrics))
+				copy(metrics, collectedMetrics)
+				collectedMetrics = nil
 				mu.RUnlock()
 
 				if len(metrics) > 0 {
-					sendCtx, cancelSend := context.WithTimeout(gctx, 5*time.Second)
-					defer cancelSend()
-					if retrySender, ok := a.sender.(interface {
-						Retry(ctx context.Context, operation func() error) error
-					}); ok {
-						// Используем Retry механизм
-						err := retrySender.Retry(sendCtx, func() error {
-							return a.sender.SendMetrics(sendCtx, metrics)
-						})
-						if err != nil {
-							log.Printf("Failed to send metrics after retries: %v", err)
-						} else {
-							log.Printf("Successfully sent %d metrics", len(metrics))
-						}
-					} else {
-						// Fallback: отправка без retry (старая логика)
-						if err := a.sender.SendMetrics(sendCtx, metrics); err != nil {
-							log.Printf("Failed to send metrics: %v", err)
-						} else {
-							log.Printf("Successfully sent %d metrics (without retry)", len(metrics))
-						}
+					select {
+					case metricsCh <- metrics:
+						log.Printf("Dispatched %d metrics to worker pool", len(metrics))
+					case <-gctx.Done():
+						return nil
+					default:
+						log.Printf("Worker pool busy, skipping batch of %d metrics", len(metrics))
 					}
 				}
 			}
 		}
 	})
 
-	// Ждем завершения всех горутин
 	if err := g.Wait(); err != nil {
 		return err
 	}
 
-	// Финальная отправка при shutdown с retry
-	mu.Lock()
-	metrics := collectedMetrics
-	mu.Unlock()
+	return a.finalShutdownSend(collectedMetrics)
+}
 
+// Worker для отправки метрик
+func (a *Agent) reportWorker(ctx context.Context, metricsCh <-chan []model.Metrics) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case metrics, ok := <-metricsCh:
+			if !ok {
+				return nil
+			}
+
+			if len(metrics) > 0 {
+				sendCtx, cancelSend := context.WithTimeout(ctx, 5*time.Second)
+				defer cancelSend()
+
+				if retrySender, ok := a.sender.(interface {
+					Retry(ctx context.Context, operation func() error) error
+				}); ok {
+					err := retrySender.Retry(sendCtx, func() error {
+						return a.sender.SendMetrics(sendCtx, metrics)
+					})
+					if err != nil {
+						log.Printf("Worker failed to send %d metrics after retries: %v", len(metrics), err)
+					} else {
+						log.Printf("Worker successfully sent %d metrics", len(metrics))
+					}
+				} else {
+					if err := a.sender.SendMetrics(sendCtx, metrics); err != nil {
+						log.Printf("Worker failed to send %d metrics: %v", len(metrics), err)
+					} else {
+						log.Printf("Worker successfully sent %d metrics", len(metrics))
+					}
+				}
+			}
+		}
+	}
+}
+
+// Финальная отправка при shutdown
+func (a *Agent) finalShutdownSend(metrics []model.Metrics) error {
 	if len(metrics) > 0 {
 		log.Printf("Performing final send of %d metrics before shutdown", len(metrics))
 		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancelShutdown()
 
-		// Финальная попытка отправки с retry
 		if retrySender, ok := a.sender.(interface {
 			Retry(ctx context.Context, operation func() error) error
 		}); ok {
@@ -126,6 +183,5 @@ func (a *Agent) Start(ctx context.Context) error {
 			_ = a.sender.SendMetrics(shutdownCtx, metrics)
 		}
 	}
-
 	return nil
 }

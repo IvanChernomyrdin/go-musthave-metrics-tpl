@@ -11,8 +11,8 @@ import (
 )
 
 func main() {
-	addrAgent, pollDuration, reportDuration, hash := agent.EnvConfigRes()
-	config := agent.NewConfig(addrAgent, pollDuration, reportDuration, hash)
+	addrAgent, pollDuration, reportDuration, hash, rateLimit := agent.EnvConfigRes()
+	config := agent.NewConfig(addrAgent, pollDuration, reportDuration, hash, rateLimit)
 
 	collector := agent.NewRuntimeMetricsCollector()
 	sender := agent.NewHTTPSender(config.GetServerURL(), config.GetHash())

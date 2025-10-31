@@ -13,6 +13,7 @@ type Config struct {
 	PollInterval   time.Duration
 	ReportInterval time.Duration
 	Hash           string
+	RateLimit      int
 }
 
 type EnvConfig struct {
@@ -20,16 +21,20 @@ type EnvConfig struct {
 	ReportInterval int    `env:"REPORT_INTERVAL"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
 	Hash           string `env:"KEY"`
+	RateLimit      int    `env:"RATE_LIMIT"`
 }
 
-var addrAgent, hash string
-var pollInterval, reportInterval int
+var (
+	addrAgent, hash                         string
+	pollInterval, reportInterval, rateLimit int
+)
 
-func EnvConfigRes() (string, time.Duration, time.Duration, string) {
+func EnvConfigRes() (string, time.Duration, time.Duration, string, int) {
 	flag.StringVar(&addrAgent, "a", "localhost:8080", "http-agent address")
 	flag.IntVar(&pollInterval, "p", 2, "poll interval in seconds")
 	flag.IntVar(&reportInterval, "r", 10, "report interval in seconds")
 	flag.StringVar(&hash, "k", "", "sha256 encryption key")
+	flag.IntVar(&rateLimit, "l", 3, "rate limit working goroutine")
 	flag.Parse()
 
 	var envCfg EnvConfig
@@ -51,19 +56,23 @@ func EnvConfigRes() (string, time.Duration, time.Duration, string) {
 	if envCfg.Hash != "" {
 		hash = envCfg.Hash
 	}
+	if envCfg.RateLimit != 0 {
+		rateLimit = envCfg.RateLimit
+	}
 
 	pollDuration := time.Duration(pollInterval) * time.Second
 	reportDuration := time.Duration(reportInterval) * time.Second
 
-	return addrAgent, pollDuration, reportDuration, hash
+	return addrAgent, pollDuration, reportDuration, hash, rateLimit
 }
 
-func NewConfig(addrAgent string, pollInterval time.Duration, reportInterval time.Duration, hash string) *Config {
+func NewConfig(addrAgent string, pollInterval time.Duration, reportInterval time.Duration, hash string, rateLimit int) *Config {
 	def := Config{
 		ServerURL:      "http://" + addrAgent,
 		PollInterval:   pollInterval,
 		ReportInterval: reportInterval,
 		Hash:           hash,
+		RateLimit:      rateLimit,
 	}
 
 	return &Config{
@@ -71,6 +80,7 @@ func NewConfig(addrAgent string, pollInterval time.Duration, reportInterval time
 		PollInterval:   def.PollInterval,
 		ReportInterval: def.ReportInterval,
 		Hash:           def.Hash,
+		RateLimit:      def.RateLimit,
 	}
 }
 
@@ -79,3 +89,4 @@ func (c *Config) GetServerURL() string             { return c.ServerURL }
 func (c *Config) GetPollInterval() time.Duration   { return c.PollInterval }
 func (c *Config) GetReportInterval() time.Duration { return c.ReportInterval }
 func (c *Config) GetHash() string                  { return c.Hash }
+func (c *Config) GetRateLimit() int                { return c.RateLimit }
