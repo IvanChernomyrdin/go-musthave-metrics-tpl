@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	agent "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/agent"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
 )
 
 func main() {
@@ -22,6 +22,6 @@ func main() {
 	defer stop()
 
 	if err := metricsAgent.Start(ctx); err != nil {
-		log.Printf("Failed to start metrics agent: %v", err)
+		logger.NewHTTPLogger().Logger.Sugar().Fatalf("Failed to start metrics agent: %v", err)
 	}
 }

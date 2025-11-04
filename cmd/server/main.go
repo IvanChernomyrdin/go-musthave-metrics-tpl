@@ -14,35 +14,37 @@ import (
 	httpserver "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/handler"
 	memory "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/memory"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/postgres"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
 	service "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/service"
 )
 
 func main() {
 	cfg := config.Load()
 
+	castomLogger := logger.NewHTTPLogger().Logger.Sugar()
+
 	var repo memory.Storage
 	var usePostgreSQL bool
 
 	// Пытаемся использовать PostgreSQL если указан DSN
 	if cfg.DatabaseDSN != "" {
-		log.Printf("Попытка подключения к PostgreSQL: %s", cfg.DatabaseDSN)
 		if err := db.Init(cfg.DatabaseDSN); err != nil {
-			log.Printf("PostgreSQL недоступна: %v", err)
+			castomLogger.Infof("PostgreSQL недоступна: %v", err)
 			repo = memory.New()
 			usePostgreSQL = false
 		} else {
 			repo = postgres.New()
 			usePostgreSQL = true
-			log.Println("Используется PostgreSQL хранилище")
+			castomLogger.Info("Используется PostgreSQL хранилище")
 		}
 	} else {
 		repo = memory.New()
 		usePostgreSQL = false
-		log.Println("Используется memory хранилище")
+		castomLogger.Info("Используется memory хранилище")
 	}
 	defer func() {
 		if err := repo.Close(); err != nil {
-			log.Printf("Ошибка при закрытии хранилища: %v", err)
+			с.Infof("Ошибка при закрытии хранилища: %v", err)
 		}
 	}()
 
@@ -50,9 +52,9 @@ func main() {
 
 	// Загрузка из файла только если НЕ используется PostgreSQL
 	if !usePostgreSQL && cfg.Restore && cfg.FileStoragePath != "" {
-		log.Printf("Загрузка метрик из файла: %s", cfg.FileStoragePath)
+		castomLogger.Infof("Загрузка метрик из файла: %s", cfg.FileStoragePath)
 		if err := svc.LoadFromFile(cfg.FileStoragePath); err != nil {
-			log.Printf("Ошибка загрузки метрик: %v", err)
+			castomLogger.Infof("Ошибка загрузки метрик: %v", err)
 		}
 	}
 
@@ -66,10 +68,10 @@ func main() {
 		if cfg.StoreInterval > 0 {
 			DurationStoreInterval := time.Duration(cfg.StoreInterval) * time.Second
 			ticker = svc.StartPeriodicSaving(cfg.FileStoragePath, DurationStoreInterval)
-			log.Printf("Периодическое сохранение каждые %d секунд", cfg.StoreInterval)
+			castomLogger.Infof("Периодическое сохранение каждые %d секунд", cfg.StoreInterval)
 		} else {
 			r = svc.SaveOnUpdateMiddleware(cfg.FileStoragePath)(r)
-			log.Println("Синхронное сохранение включено")
+			castomLogger.Info("Синхронное сохранение включено")
 		}
 	}
 
@@ -85,12 +87,12 @@ func main() {
 	go func() {
 		log.Printf("Сервер запущен на %s", cfg.Address)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Ошибка сервера: %v", err)
+			castomLogger.Fatalf("Ошибка сервера: %v", err)
 		}
 	}()
 
 	<-quit
-	log.Println("Завершение работы сервера...")
+	castomLogger.Info("Завершение работы сервера...")
 
 	if ticker != nil {
 		ticker.Stop()
@@ -98,9 +100,9 @@ func main() {
 
 	// Сохранение в файл только если НЕ используется PostgreSQL
 	if !usePostgreSQL && cfg.FileStoragePath != "" {
-		log.Println("Сохранение метрик...")
+		castomLogger.Info("Сохранение метрик...")
 		if err := svc.SaveToFile(cfg.FileStoragePath); err != nil {
-			log.Printf("Ошибка сохранения при завершении: %v", err)
+			castomLogger.Infof("Ошибка сохранения при завершении: %v", err)
 		}
 	}
 
@@ -108,8 +110,8 @@ func main() {
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Принудительное завершение: %v", err)
+		castomLogger.Fatalf("Принудительное завершение: %v", err)
 	}
 
-	log.Println("Сервер остановлен")
+	castomLogger.Info("Сервер остановлен")
 }

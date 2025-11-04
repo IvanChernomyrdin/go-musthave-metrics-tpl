@@ -2,16 +2,17 @@ package agent
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
 	model "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
 	"golang.org/x/sync/errgroup"
 )
+
+var castomLogger = logger.NewHTTPLogger().Logger.Sugar()
 
 type Agent struct {
 	collector model.MetricsCollector
@@ -40,8 +41,7 @@ func (a *Agent) Start(ctx context.Context) error {
 	defer pollTicker.Stop()
 	defer reportTicker.Stop()
 
-	var collectedMetrics []model.Metrics
-	var mu sync.RWMutex
+	collectedMetrics := NewSafeMetrics()
 
 	// Канал для отправки метрик с буфером по rate limit
 	metricsCh := make(chan []model.Metrics, a.rateLimit*2)
@@ -54,9 +54,7 @@ func (a *Agent) Start(ctx context.Context) error {
 				return nil
 			case <-pollTicker.C:
 				metrics := a.collector.Collect()
-				mu.Lock()
-				collectedMetrics = append(collectedMetrics, metrics...)
-				mu.Unlock()
+				collectedMetrics.Append(metrics)
 			}
 		}
 	})
@@ -72,9 +70,7 @@ func (a *Agent) Start(ctx context.Context) error {
 				return nil
 			case <-systemTicker.C:
 				systemMetrics := a.collector.CollectSystemMetrics()
-				mu.Lock()
-				collectedMetrics = append(collectedMetrics, systemMetrics...)
-				mu.Unlock()
+				collectedMetrics.Append(systemMetrics)
 			}
 		}
 	})
@@ -96,20 +92,16 @@ func (a *Agent) Start(ctx context.Context) error {
 			case <-gctx.Done():
 				return nil
 			case <-reportTicker.C:
-				mu.RLock()
-				metrics := make([]model.Metrics, len(collectedMetrics))
-				copy(metrics, collectedMetrics)
-				collectedMetrics = nil
-				mu.RUnlock()
-
-				if len(metrics) > 0 {
+				if collectedMetrics.Len() > 0 {
+					metrics := collectedMetrics.GetAndClear()
 					select {
 					case metricsCh <- metrics:
-						log.Printf("Dispatched %d metrics to worker pool", len(metrics))
+						castomLogger.Infof("Dispatched %d metrics to worker pool", len(metrics))
 					case <-gctx.Done():
 						return nil
 					default:
-						log.Printf("Worker pool busy, skipping batch of %d metrics", len(metrics))
+						castomLogger.Infof("Worker pool busy, skipping batch of %d metrics", len(metrics))
+						collectedMetrics.Append(metrics)
 					}
 				}
 			}
@@ -120,7 +112,7 @@ func (a *Agent) Start(ctx context.Context) error {
 		return err
 	}
 
-	return a.finalShutdownSend(collectedMetrics)
+	return a.finalShutdownSend(collectedMetrics.GetAndClear())
 }
 
 // Worker для отправки метрик
@@ -145,15 +137,15 @@ func (a *Agent) reportWorker(ctx context.Context, metricsCh <-chan []model.Metri
 						return a.sender.SendMetrics(sendCtx, metrics)
 					})
 					if err != nil {
-						log.Printf("Worker failed to send %d metrics after retries: %v", len(metrics), err)
+						castomLogger.Infof("Worker failed to send %d metrics after retries: %v", len(metrics), err)
 					} else {
-						log.Printf("Worker successfully sent %d metrics", len(metrics))
+						castomLogger.Infof("Worker successfully sent %d metrics", len(metrics))
 					}
 				} else {
 					if err := a.sender.SendMetrics(sendCtx, metrics); err != nil {
-						log.Printf("Worker failed to send %d metrics: %v", len(metrics), err)
+						castomLogger.Infof("Worker failed to send %d metrics: %v", len(metrics), err)
 					} else {
-						log.Printf("Worker successfully sent %d metrics", len(metrics))
+						castomLogger.Infof("Worker successfully sent %d metrics", len(metrics))
 					}
 				}
 			}
@@ -164,7 +156,7 @@ func (a *Agent) reportWorker(ctx context.Context, metricsCh <-chan []model.Metri
 // Финальная отправка при shutdown
 func (a *Agent) finalShutdownSend(metrics []model.Metrics) error {
 	if len(metrics) > 0 {
-		log.Printf("Performing final send of %d metrics before shutdown", len(metrics))
+		castomLogger.Infof("Performing final send of %d metrics before shutdown", len(metrics))
 		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancelShutdown()
 
@@ -175,9 +167,9 @@ func (a *Agent) finalShutdownSend(metrics []model.Metrics) error {
 				return a.sender.SendMetrics(shutdownCtx, metrics)
 			})
 			if err != nil {
-				log.Printf("Final send failed: %v", err)
+				castomLogger.Infof("Final send failed: %v", err)
 			} else {
-				log.Printf("Final send completed successfully")
+				castomLogger.Infof("Final send completed successfully")
 			}
 		} else {
 			_ = a.sender.SendMetrics(shutdownCtx, metrics)
