@@ -44,7 +44,7 @@ func main() {
 	}
 	defer func() {
 		if err := repo.Close(); err != nil {
-			с.Infof("Ошибка при закрытии хранилища: %v", err)
+			castomLogger.Infof("Ошибка при закрытии хранилища: %v", err)
 		}
 	}()
 
