@@ -115,10 +115,10 @@ type HTTPSender struct {
 	maxConc         int
 	retryConfig     RetryConfig
 	errorClassifier *HTTPErrorClassifier
-	hashKey         string
+	HashKey         string
 }
 
-func NewHTTPSender(serverURL string, hashKey string) *HTTPSender {
+func NewHTTPSender(serverURL string, HashKey string) *HTTPSender {
 	client := resty.New()
 	client.SetTimeout(10 * time.Second)
 
@@ -128,15 +128,15 @@ func NewHTTPSender(serverURL string, hashKey string) *HTTPSender {
 		maxConc:         max(2, runtime.NumCPU()/2),
 		retryConfig:     DefaultRetryConfig(),
 		errorClassifier: NewHTTPErrorClassifier(),
-		hashKey:         hashKey,
+		HashKey:         HashKey,
 	}
 }
 
 func (s *HTTPSender) calculateHash256(b []byte) string {
-	if s.hashKey == "" {
+	if s.HashKey == "" {
 		return ""
 	}
-	h := hmac.New(sha256.New, []byte(s.hashKey))
+	h := hmac.New(sha256.New, []byte(s.HashKey))
 	h.Write(b)
 	return hex.EncodeToString(h.Sum(nil))
 }

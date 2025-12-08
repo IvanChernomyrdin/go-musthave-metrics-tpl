@@ -16,7 +16,7 @@ import (
 var DB *sql.DB
 
 func Init(databaseDSN string) error {
-	connection := getConnect(databaseDSN)
+	connection := GetConnect(databaseDSN)
 
 	var err error
 	DB, err = sql.Open("pgx", connection)
@@ -50,7 +50,7 @@ func Init(databaseDSN string) error {
 	return nil
 }
 
-func getConnect(connectionFlag string) string {
+func GetConnect(connectionFlag string) string {
 	if envConnection := os.Getenv("DATABASE_DSN"); envConnection != "" {
 		return strings.Trim(envConnection, `"`)
 	}

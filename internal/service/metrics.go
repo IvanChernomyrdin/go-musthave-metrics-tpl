@@ -191,13 +191,13 @@ func (ms *MetricsService) LoadFromFile(filename string) error {
 	return nil
 }
 
-// responseWriter для отслеживания статуса ответа
-type responseWriter struct {
+// ResponseWriter для отслеживания статуса ответа
+type ResponseWriter struct {
 	http.ResponseWriter
 	statusCode int
 }
 
-func (rw *responseWriter) WriteHeader(code int) {
+func (rw *ResponseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
 }
@@ -206,7 +206,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 func (ms *MetricsService) SaveOnUpdateMiddleware(filename string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			rw := &responseWriter{
+			rw := &ResponseWriter{
 				ResponseWriter: w,
 				statusCode:     http.StatusOK,
 			}

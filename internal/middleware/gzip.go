@@ -14,7 +14,14 @@ func GzipDecompression(httpGzip http.Handler) http.Handler {
 		//по тз проверяем content-encoding gzip
 		contentEncoding := r.Header.Get("Content-Encoding")
 
-		if strings.Contains(contentEncoding, "gzip") {
+		if strings.Contains(strings.ToLower(contentEncoding), "gzip") {
+			//если тело пустое выходим
+			if r.ContentLength == 0 || r.Body == http.NoBody {
+				r.Header.Del("Content-Encoding")
+				httpGzip.ServeHTTP(w, r)
+				return
+			}
+
 			//создания reader для распаковки
 			gz, err := gzip.NewReader(r.Body)
 			if err != nil {
@@ -39,16 +46,16 @@ func GzipDecompression(httpGzip http.Handler) http.Handler {
 	})
 }
 
-type gzipResponseWriter struct {
+type GzipResponseWriter struct {
 	io.Writer
 	http.ResponseWriter
 }
 
-func (w gzipResponseWriter) Write(b []byte) (int, error) {
+func (w GzipResponseWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
-func (w gzipResponseWriter) WriteHeader(statusCode int) {
+func (w GzipResponseWriter) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
@@ -69,7 +76,7 @@ func GzipCompression(next http.Handler) http.Handler {
 
 		w.Header().Set("Content-Encoding", "gzip")
 
-		gzrw := gzipResponseWriter{
+		gzrw := GzipResponseWriter{
 			Writer:         gz,
 			ResponseWriter: w,
 		}
