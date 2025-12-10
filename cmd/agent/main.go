@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,6 +13,9 @@ import (
 )
 
 func main() {
+	go func() {
+		http.ListenAndServe("localhost:6060", nil)
+	}()
 	addrAgent, pollDuration, reportDuration, hash, rateLimit := agent.EnvConfigRes()
 	config := agent.NewConfig(addrAgent, pollDuration, reportDuration, hash, rateLimit)
 

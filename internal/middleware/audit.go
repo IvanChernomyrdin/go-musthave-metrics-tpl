@@ -69,6 +69,13 @@ func (u *URLAuditReceiver) Notify(event *AuditEvent) error {
 func AuditMiddleware(auditReceivers []AuditReceiver) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost ||
+				(r.URL.Path != "/update" &&
+					r.URL.Path != "/update/" &&
+					r.URL.Path != "/updates/") {
+				next.ServeHTTP(w, r)
+				return
+			}
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
 				runtime.NewHTTPLogger().Logger.Sugar().Warnf("Error reading request body: %v", err)
@@ -103,12 +110,13 @@ func AuditMiddleware(auditReceivers []AuditReceiver) func(next http.Handler) htt
 				IPAddress: r.RemoteAddr,
 			}
 
-			for _, receiver := range auditReceivers {
-				if err := receiver.Notify(event); err != nil {
-					runtime.NewHTTPLogger().Logger.Sugar().Warnf("Error while sending audit: %v", err)
+			go func() {
+				for _, receiver := range auditReceivers {
+					if err := receiver.Notify(event); err != nil {
+						runtime.NewHTTPLogger().Logger.Sugar().Warnf("Error while sending audit: %v", err)
+					}
 				}
-			}
-
+			}()
 			next.ServeHTTP(w, r)
 		})
 	}
