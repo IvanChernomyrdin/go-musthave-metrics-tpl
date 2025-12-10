@@ -12,6 +12,7 @@ import (
 	config "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config"
 	db "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config/db"
 	httpserver "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/handler"
+	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/middleware"
 	memory "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/memory"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/postgres"
 	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
@@ -59,7 +60,14 @@ func main() {
 	}
 
 	h := httpserver.NewHandler(svc)
-	r := httpserver.NewRouter(h, cfg.HashKey)
+	var auditReceivers []middleware.AuditReceiver
+	if cfg.AuditFile != "" {
+		auditReceivers = append(auditReceivers, &middleware.FileAuditReceiver{FilePath: cfg.AuditFile})
+	}
+	if cfg.AuditURL != "" {
+		auditReceivers = append(auditReceivers, &middleware.URLAuditReceiver{URL: cfg.AuditURL})
+	}
+	r := httpserver.NewRouter(h, cfg.HashKey, auditReceivers)
 
 	var ticker *time.Ticker
 

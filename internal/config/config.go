@@ -16,6 +16,8 @@ type Config struct {
 	Restore         bool
 	DatabaseDSN     string
 	HashKey         string
+	AuditFile       string
+	AuditURL        string
 }
 
 func Load() *Config {
@@ -29,6 +31,8 @@ func Load() *Config {
 	flag.BoolVar(&cfg.Restore, "r", true, "загружать метрики при запуске")
 	flag.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "Database connection string")
 	flag.StringVar(&cfg.HashKey, "k", "", "ключ подписики по алгоритму sha256")
+	flag.StringVar(&cfg.AuditFile, "audit-file", "", "audit path logs file")
+	flag.StringVar(&cfg.AuditURL, "audit-url", "", "audit url push logs")
 	flag.Parse()
 
 	cfg.applyEnv()
@@ -58,6 +62,12 @@ func (cfg *Config) applyEnv() {
 	}
 	if envHashKey := os.Getenv("KEY"); envHashKey != "" {
 		cfg.HashKey = envHashKey
+	}
+	if envAuditFile := os.Getenv("AUDIT_FILE"); envAuditFile != "" {
+		cfg.AuditFile = envAuditFile
+	}
+	if envAuditURL := os.Getenv("AUDIT_URL"); envAuditURL != "" {
+		cfg.AuditURL = envAuditURL
 	}
 }
 

@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(h *Handler, HashKey string) http.Handler {
+func NewRouter(h *Handler, HashKey string, auditReceivers []middleware.AuditReceiver) http.Handler {
 	r := chi.NewRouter()
 
 	// декомпрессия данных
@@ -16,6 +16,8 @@ func NewRouter(h *Handler, HashKey string) http.Handler {
 	r.Use(middleware.LoggerMiddleware())
 	// компресия ответа
 	r.Use(middleware.GzipCompression)
+	//аудит
+	r.Use(middleware.AuditMiddleware(auditReceivers))
 
 	//проверка и добавление хэша
 	hashMiddleware := middleware.NewHashMiddleware(HashKey)

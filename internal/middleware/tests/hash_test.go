@@ -381,7 +381,3 @@ func computeExpectedHash(key, data string) string {
 	hmacHash.Write([]byte(data))
 	return hex.EncodeToString(hmacHash.Sum(nil))
 }
-
-func (e *errorReader) Read(p []byte) (n int, err error) {
-	return 0, assert.AnError
-}
