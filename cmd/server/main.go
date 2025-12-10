@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,7 +23,11 @@ import (
 func main() {
 	cfg := config.Load()
 
-	castomLogger := logger.NewHTTPLogger().Logger.Sugar()
+	customLogger := logger.NewHTTPLogger().Logger.Sugar()
+
+	go func() {
+		http.ListenAndServe("localhost:6061", nil)
+	}()
 
 	var repo memory.Storage
 	var usePostgreSQL bool
@@ -30,22 +35,22 @@ func main() {
 	// Пытаемся использовать PostgreSQL если указан DSN
 	if cfg.DatabaseDSN != "" {
 		if err := db.Init(cfg.DatabaseDSN); err != nil {
-			castomLogger.Infof("PostgreSQL недоступна: %v", err)
+			customLogger.Infof("PostgreSQL недоступна: %v", err)
 			repo = memory.New()
 			usePostgreSQL = false
 		} else {
 			repo = postgres.New()
 			usePostgreSQL = true
-			castomLogger.Info("Используется PostgreSQL хранилище")
+			customLogger.Info("Используется PostgreSQL хранилище")
 		}
 	} else {
 		repo = memory.New()
 		usePostgreSQL = false
-		castomLogger.Info("Используется memory хранилище")
+		customLogger.Info("Используется memory хранилище")
 	}
 	defer func() {
 		if err := repo.Close(); err != nil {
-			castomLogger.Infof("Ошибка при закрытии хранилища: %v", err)
+			customLogger.Infof("Ошибка при закрытии хранилища: %v", err)
 		}
 	}()
 
@@ -53,9 +58,9 @@ func main() {
 
 	// Загрузка из файла только если НЕ используется PostgreSQL
 	if !usePostgreSQL && cfg.Restore && cfg.FileStoragePath != "" {
-		castomLogger.Infof("Загрузка метрик из файла: %s", cfg.FileStoragePath)
+		customLogger.Infof("Загрузка метрик из файла: %s", cfg.FileStoragePath)
 		if err := svc.LoadFromFile(cfg.FileStoragePath); err != nil {
-			castomLogger.Infof("Ошибка загрузки метрик: %v", err)
+			customLogger.Infof("Ошибка загрузки метрик: %v", err)
 		}
 	}
 
@@ -76,10 +81,10 @@ func main() {
 		if cfg.StoreInterval > 0 {
 			DurationStoreInterval := time.Duration(cfg.StoreInterval) * time.Second
 			ticker = svc.StartPeriodicSaving(cfg.FileStoragePath, DurationStoreInterval)
-			castomLogger.Infof("Периодическое сохранение каждые %d секунд", cfg.StoreInterval)
+			customLogger.Infof("Периодическое сохранение каждые %d секунд", cfg.StoreInterval)
 		} else {
 			r = svc.SaveOnUpdateMiddleware(cfg.FileStoragePath)(r)
-			castomLogger.Info("Синхронное сохранение включено")
+			customLogger.Info("Синхронное сохранение включено")
 		}
 	}
 
@@ -95,12 +100,12 @@ func main() {
 	go func() {
 		log.Printf("Сервер запущен на %s", cfg.Address)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			castomLogger.Fatalf("Ошибка сервера: %v", err)
+			customLogger.Fatalf("Ошибка сервера: %v", err)
 		}
 	}()
 
 	<-quit
-	castomLogger.Info("Завершение работы сервера...")
+	customLogger.Info("Завершение работы сервера...")
 
 	if ticker != nil {
 		ticker.Stop()
@@ -108,9 +113,9 @@ func main() {
 
 	// Сохранение в файл только если НЕ используется PostgreSQL
 	if !usePostgreSQL && cfg.FileStoragePath != "" {
-		castomLogger.Info("Сохранение метрик...")
+		customLogger.Info("Сохранение метрик...")
 		if err := svc.SaveToFile(cfg.FileStoragePath); err != nil {
-			castomLogger.Infof("Ошибка сохранения при завершении: %v", err)
+			customLogger.Infof("Ошибка сохранения при завершении: %v", err)
 		}
 	}
 
@@ -118,8 +123,8 @@ func main() {
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		castomLogger.Fatalf("Принудительное завершение: %v", err)
+		customLogger.Fatalf("Принудительное завершение: %v", err)
 	}
 
-	castomLogger.Info("Сервер остановлен")
+	customLogger.Info("Сервер остановлен")
 }
