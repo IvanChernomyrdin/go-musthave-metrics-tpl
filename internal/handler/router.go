@@ -3,8 +3,11 @@ package httpserver
 import (
 	"net/http"
 
+	_ "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/docs" //
+
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/middleware"
 	"github.com/go-chi/chi/v5"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 func NewRouter(h *Handler, HashKey string, auditReceivers []middleware.AuditReceiver) http.Handler {
@@ -33,6 +36,10 @@ func NewRouter(h *Handler, HashKey string, auditReceivers []middleware.AuditRece
 	r.Get("/value/{type}/{name}", h.GetValue)
 	r.Get("/", h.GetAll)
 	r.Get("/ping", h.PingDB)
+
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
 
 	return r
 }

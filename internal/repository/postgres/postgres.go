@@ -1,3 +1,5 @@
+// пакет postgres содержит реализацию хранилища на базе Postgres.
+// предоставляет надёжное, устойчивое к ошибкам подключение, с поддержкой повторных попыток и классификацией ошибок.
 package postgres
 
 import (
@@ -12,12 +14,15 @@ import (
 	errPostgres "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/postgres/errors"
 )
 
+// конфиг для повторных попыток
+// для решения проблем с сбоями, сети или бд
 type RetryConfig struct {
-	MaxAttempts  int
-	InitialDelay time.Duration
-	MaxDelay     time.Duration
+	MaxAttempts  int           // максимальное кол-во попыток выполнения операции
+	InitialDelay time.Duration // начальная задержка между попытками
+	MaxDelay     time.Duration // максимальная задержка между попытками
 }
 
+// возвращает конфиг повторных попыток по умолчанию
 func DefaultRetryConfig() RetryConfig {
 	return RetryConfig{
 		MaxAttempts:  3,
@@ -26,13 +31,21 @@ func DefaultRetryConfig() RetryConfig {
 	}
 }
 
+// реализует хранилище бд
 type PostgresStorage struct {
-	db              *sql.DB
-	retryConfig     RetryConfig
-	errorClassifier *errPostgres.PostgresErrorClassifier
+	db              *sql.DB                              // подключение к бд
+	retryConfig     RetryConfig                          // конфиг для повторной отправки операции
+	errorClassifier *errPostgres.PostgresErrorClassifier // классификация ошибок
 }
 
+// константные запросы обновления или создания метрик по типам
 const (
+	// использует INSERT ... ON CONFLICT ... DO UPDATE, для атомарности.
+	// Параметры:
+	//	$1 - идентификатор ID
+	//	$2 - тип метрики ("gauge")
+	//	$3 - значение метрики (число с плавающей точкой)
+	// при обновлении delta выставляет в null т.к. gauge значение хранится в value
 	upsertGaugeSQL = `
 		INSERT INTO metrics (id, mtype, value, delta) 
 		VALUES ($1, $2, $3, NULL)
@@ -42,7 +55,13 @@ const (
 			delta = NULL,
 			updated_at = CURRENT_TIMESTAMP
 	`
-
+	// использует INSERT ... ON CONFLICT ... DO UPDATE, для атомарности.
+	// Параметры:
+	//	$1 - идентификатор ID
+	//	$2 - тип метрики ("counter")
+	//	$3 - значение метрики (целочисленное число)
+	// устанавливае value выставляет в null т.к. gauge значение хранится в delta
+	// при обновлении увеличивает текущее значение delta на входящее delta
 	upsertCounterSQL = `
 		INSERT INTO metrics (id, mtype, delta, value) 
 		VALUES ($1, $2, $3, NULL)
@@ -54,6 +73,7 @@ const (
 	`
 )
 
+// создаёт новый экземпляр PostgresStorage
 func New() *PostgresStorage {
 	return &PostgresStorage{
 		db:              db.GetDB(),

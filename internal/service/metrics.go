@@ -1,3 +1,5 @@
+// Пакет service содержит бизнес-логику приложения для работы с метриками.
+// Он служит промежуточным слоем между http-обработчиками и хранилищем данных(memory, database, json file).
 package service
 
 import (
@@ -14,44 +16,64 @@ import (
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 )
 
+// константы определяющие типы метрик.
 const (
-	Counter = "counter"
-	Gauge   = "gauge"
+	Counter = "counter" // тип-метрики счётчика (целочисленное).
+	Gauge   = "gauge"   // тип-метрики измерителя (число с плавающей точкой).
 )
 
+// интерфейс для работы с хранилищем метрик.
 type MetricsRepo interface {
+	// создаёт или обновляет метрику типа gauge.
 	UpsertGauge(id string, value float64) error
+	// создаёт или обновляет метрику типа counter.
 	UpsertCounter(id string, delta int64) error
+	// получает значение метрики типа gauge.
 	GetGauge(id string) (float64, bool)
+	// получает значение метрики типа counter.
 	GetCounter(id string) (int64, bool)
+	// получает список метрик gauge и counter.
 	GetAll() (map[string]float64, map[string]int64)
+	// обновляет или добавляет несколько метрик за одну операцию.
 	UpdateMetricsBatch(metrics []model.Metrics) error
 }
 
+// предостовляет бизнес-логику для работы с метриками.
+// прослойка между http-обработчиками и бд.
 type MetricsService struct {
 	repo MetricsRepo
 }
 
+// создаёт новый экземпляр MetricsService.
 func NewMetricsService(repo MetricsRepo) *MetricsService {
 	return &MetricsService{repo: repo}
 }
 
+// обновляет метрику типа gauge.
 func (ms *MetricsService) UpdateGauge(id string, value float64) error {
 	return ms.repo.UpsertGauge(id, value)
 }
 
+// обновляет метрику типа counter
 func (ms *MetricsService) UpdateCounter(id string, delta int64) error {
 	return ms.repo.UpsertCounter(id, delta)
 }
 
+// получение значения метрики типа gauge
 func (ms *MetricsService) GetGauge(id string) (float64, bool) {
 	return ms.repo.GetGauge(id)
 }
 
+// получение значения метрики типа counter
 func (ms *MetricsService) GetCounter(id string) (int64, bool) {
 	return ms.repo.GetCounter(id)
 }
 
+// получение значения метрики
+// в ответе возвращает: три значения.
+// первое значение: строковое представление знаячения.
+// второе значение: булево значение найдена ли метрика.
+// третье значение: булево значение корректен ли тип метрики.
 func (ms *MetricsService) GetValue(mtype, name string) (string, bool, bool) {
 	switch mtype {
 	case Gauge:
@@ -72,6 +94,7 @@ func (ms *MetricsService) GetValue(mtype, name string) (string, bool, bool) {
 	}
 }
 
+// возвращает все метрики в виде карты "тип": "значение".
 func (ms *MetricsService) AllText() map[string]string {
 	gs, cs := ms.repo.GetAll()
 	out := make(map[string]string, len(gs)+len(cs))
@@ -86,10 +109,14 @@ func (ms *MetricsService) AllText() map[string]string {
 	return out
 }
 
+// обновляет несколько метрик за одну операцию.
 func (ms *MetricsService) UpdateMetricsBatch(metrics []model.Metrics) error {
 	return ms.repo.UpdateMetricsBatch(metrics)
 }
 
+// сохраняет все метрики в JSON файл.
+// сохранение происходит атомарно через временный файл.
+// если filename пустой, функция ничего не делает.
 func (ms *MetricsService) SaveToFile(filename string) error {
 	if filename == "" {
 		return nil
@@ -149,6 +176,7 @@ func (ms *MetricsService) SaveToFile(filename string) error {
 	return nil
 }
 
+// загружает метрики из JSON файла.
 func (ms *MetricsService) LoadFromFile(filename string) error {
 	if filename == "" {
 		return nil
@@ -197,12 +225,14 @@ type ResponseWriter struct {
 	statusCode int
 }
 
+// переопределяет хедер для отслеживания статуса
 func (rw *ResponseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
 }
 
 // SaveOnUpdateMiddleware middleware для синхронного сохранения после обновлений
+// если успешно то сохраянет метрику в файл
 func (ms *MetricsService) SaveOnUpdateMiddleware(filename string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

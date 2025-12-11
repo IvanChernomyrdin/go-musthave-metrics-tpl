@@ -1,3 +1,5 @@
+// пакет memory предожает реализацию хранилища метрик в оперативной памяти.
+// хранилище потокобезопасно и предназначено для использования в текущей версии сервиса для тестов т.к. при перезагрузке или падении сервиса данные потеряются.
 package memory
 
 import (
@@ -6,19 +8,30 @@ import (
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 )
 
+// реализует хранилище метрик в оперативной памяти.
+// использует мапы для хранения чтобы значения были уникальными.
+// добавлены мьютексы для потокобезопасности.
 type MemStorage struct {
 	mu       sync.RWMutex
 	gauges   map[string]float64
 	counters map[string]int64
 }
 
+// определяет интерфейс хранилища метрик.
 type Storage interface {
+	// создает или обновляет метрику типа gauge.
 	UpsertGauge(name string, v float64) error
+	// создает или обновляет метрику типа counter.
 	UpsertCounter(name string, d int64) error
+	// возвращает значение метрики типа gauge по её имени.
 	GetGauge(name string) (float64, bool)
+	// возвращает значение метрики типа counter по её имени.
 	GetCounter(name string) (int64, bool)
+	// возвращает весь список метрик gauge и counter
 	GetAll() (map[string]float64, map[string]int64)
+	// обновляет несколько метрик за одну операцию.
 	UpdateMetricsBatch(metrics []model.Metrics) error
+	// освобождает ресурсы хранилища.
 	Close() error
 }
 
@@ -28,6 +41,7 @@ func New() *MemStorage {
 		counters: make(map[string]int64),
 	}
 }
+
 func (m *MemStorage) UpsertGauge(id string, value float64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

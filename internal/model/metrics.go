@@ -1,3 +1,4 @@
+// пакет model содержит основные структуры данных, интерфейсы и константы для системы сбора и хранения метрик. Определяет доменную модель приложения.
 package model
 
 import (
@@ -5,32 +6,47 @@ import (
 	"time"
 )
 
+// константы, определяющие типы метрик в системе.
 const (
-	Counter = "counter"
-	Gauge   = "gauge"
+	Counter = "counter" // тип метрики-счетчика: целочисленное значение, которое может только увеличиваться
+	Gauge   = "gauge"   // тип метрики-измерителя: числовое значение, которое может увеличиваться и уменьшаться
 )
 
+// структура метрик для передачи данных между компонентами системы
+// а также для сериализации и десериализации в JSON, хранения в базе данных и передачи по сети.
 type Metrics struct {
-	ID    string   `json:"id"`
-	MType string   `json:"type"`
-	Delta *int64   `json:"delta,omitempty"`
-	Value *float64 `json:"value,omitempty"`
-	Hash  string   `json:"hash,omitempty"`
+	ID    string   `json:"id"`              // уникальный индетификатор
+	MType string   `json:"type"`            // тим метрики
+	Delta *int64   `json:"delta,omitempty"` // целочисленное поле, используется для хранения значения метрики типа counter
+	Value *float64 `json:"value,omitempty"` // число с плавающей точкой, используется для хранения значения метрики типа gauge
+	Hash  string   `json:"hash,omitempty"`  // контрольная сумма процерки целостности данных
 }
 
+// интерфейс для сбора метрик из различных источников.
 type MetricsCollector interface {
+	// собирает все доступные метрики приложения.
 	Collect() []Metrics
+	// собирает системные метрики.
 	CollectSystemMetrics() []Metrics
 }
 
+// интерфейс для отправки метрик на сервер.
 type MetricsSender interface {
+	// отправляет массив метрик с переданным контекстом для управления таймаутами и отменой операции.
+	// возвращает ошибку в случае проблем с отправкой данных.
 	SendMetrics(ctx context.Context, metrics []Metrics) error
 }
 
+// интерфейс для получения конфигурации приложения.
 type ConfigProvider interface {
+	// возвращает URL сервера для отправки метрик.
 	GetServerURL() string
+	// возвращает интервал опроса метрик.
 	GetPollInterval() time.Duration
+	// возвращает интервал отправки метрик на сервер.
 	GetReportInterval() time.Duration
+	// возвращает секретный ключ для расчета контрольной суммы.
 	GetHash() string
+	// возвращает лимит запросов в секунду для ограничения нагрузки.
 	GetRateLimit() int
 }

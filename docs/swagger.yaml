@@ -1,0 +1,305 @@
+definitions:
+  model.Metrics:
+    properties:
+      delta:
+        description: целочисленное поле, используется для хранения значения метрики
+          типа counter
+        type: integer
+      hash:
+        description: контрольная сумма процерки целостности данных
+        type: string
+      id:
+        description: уникальный индетификатор
+        type: string
+      type:
+        description: тим метрики
+        type: string
+      value:
+        description: число с плавающей точкой, используется для хранения значения
+          метрики типа gauge
+        type: number
+    type: object
+info:
+  contact: {}
+paths:
+  /:
+    get:
+      description: Возвращает HTML страницу со списком всех метрик (gauge и counter)
+        из базы данных.
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: HTML страница со списком метрик
+          schema:
+            type: string
+        "500":
+          description: Ошибка сервера
+          schema:
+            type: string
+      summary: Получение всех метрик в HTML формате
+      tags:
+      - Info
+  /ping:
+    get:
+      description: Проверяет доступность подключения к бд
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: ОК
+          schema:
+            type: string
+        "500":
+          description: Ошибка соединения с бд
+          schema:
+            type: string
+      summary: Проверка связи от базой данных(далее бд)
+      tags:
+      - Info
+  /update:
+    post:
+      consumes:
+      - application/json
+      - text/plain
+      description: 'Обновляет метрику. Поддерживает два формата:'
+      parameters:
+      - description: Метрика в JSON формате
+        in: body
+        name: metric
+        schema:
+          $ref: '#/definitions/model.Metrics'
+      produces:
+      - application/json
+      - text/plain
+      responses:
+        "200":
+          description: Строка со статусом OK
+          schema:
+            type: string
+        "400":
+          description: 'Неверный запрос: bad gauge value, bad counter value, unknown
+            metric type, metric ID is required, gauge value is required, counter delta
+            is required'
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: 'Внутренняя ошибка сервера: store error'
+          schema:
+            type: string
+      summary: Обновление метрики
+      tags:
+      - Info
+  /update/:
+    post:
+      consumes:
+      - application/json
+      - text/plain
+      description: 'Обновляет метрику. Поддерживает два формата:'
+      parameters:
+      - description: Метрика в JSON формате
+        in: body
+        name: metric
+        schema:
+          $ref: '#/definitions/model.Metrics'
+      produces:
+      - application/json
+      - text/plain
+      responses:
+        "200":
+          description: Строка со статусом OK
+          schema:
+            type: string
+        "400":
+          description: 'Неверный запрос: bad gauge value, bad counter value, unknown
+            metric type, metric ID is required, gauge value is required, counter delta
+            is required'
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: 'Внутренняя ошибка сервера: store error'
+          schema:
+            type: string
+      summary: Обновление метрики
+      tags:
+      - Info
+  /update/{type}/{name}/{value}:
+    post:
+      consumes:
+      - application/json
+      - text/plain
+      description: 'Обновляет метрику. Поддерживает два формата:'
+      parameters:
+      - description: Метрика в JSON формате
+        in: body
+        name: metric
+        schema:
+          $ref: '#/definitions/model.Metrics'
+      - description: Тип метрики
+        enum:
+        - gauge
+        - counter
+        in: path
+        name: type
+        required: true
+        type: string
+      - description: Имя метрики
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Значение метрики
+        in: path
+        name: value
+        required: true
+        type: string
+      produces:
+      - application/json
+      - text/plain
+      responses:
+        "200":
+          description: Строка со статусом OK
+          schema:
+            type: string
+        "400":
+          description: 'Неверный запрос: bad gauge value, bad counter value, unknown
+            metric type, metric ID is required, gauge value is required, counter delta
+            is required'
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: 'Внутренняя ошибка сервера: store error'
+          schema:
+            type: string
+      summary: Обновление метрики
+      tags:
+      - Info
+  /updates:
+    post:
+      consumes:
+      - application/json
+      description: Принимает массив метрик в JSON формате и обновляет их все за один
+        запрос
+      parameters:
+      - description: Массив метрик для обновления
+        in: body
+        name: metrics
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/model.Metrics'
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Пример: {\"status\":\"OK\"}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: 'Пример: {\"error\":\"validation failed\",\"details\":[\"metric[0]:
+            ID is required\"]}'
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 'Пример: {\"error\":\"failed to update metric Alloc\"}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Пакетное обновление метрик
+      tags:
+      - Info
+  /value:
+    post:
+      consumes:
+      - application/json
+      description: Принимает JSON с полями id и type, возвращает структуру метрики
+        с полями ID, Type, Value.
+      parameters:
+      - description: Метрика для поиска (нужны только id и type)
+        in: body
+        name: metric
+        required: true
+        schema:
+          $ref: '#/definitions/model.Metrics'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Найденная метрика
+          schema:
+            $ref: '#/definitions/model.Metrics'
+        "400":
+          description: Неверный формат JSON, отсутствуют обязательные поля, неизвестный
+            тип метрики
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Метрика не найдена
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            type: string
+      summary: Получение метрики в JSON формате
+      tags:
+      - Info
+  /value/{type}/{name}:
+    get:
+      consumes:
+      - text/plain
+      description: Получает значение метрики по её типу и имени.
+      parameters:
+      - description: Тип метрики
+        enum:
+        - gauge
+        - counter
+        in: path
+        name: type
+        required: true
+        type: string
+      - description: Имя метрики
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Значение метрики в виде строки
+          schema:
+            type: string
+        "400":
+          description: Неверный тип метрики
+          schema:
+            type: string
+        "404":
+          description: Метрика не найдена
+          schema:
+            type: string
+      summary: Получение значения метрики
+      tags:
+      - Info
+swagger: "2.0"
