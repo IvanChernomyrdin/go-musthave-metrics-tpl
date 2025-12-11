@@ -322,14 +322,25 @@ func ExampleHandler_workflow() {
 	}
 
 	jsonData, _ := json.Marshal(metric)
-	http.Post(server.URL+"/update", "application/json", bytes.NewReader(jsonData))
-
+	resp, err := http.Post(server.URL+"/update", "application/json", bytes.NewReader(jsonData))
+	if err != nil && resp != nil {
+		resp.Body.Close()
+	}
 	// 2. Получаем её значение через URL
-	resp, _ := http.Get(server.URL + "/value/gauge/Temperature")
+	resp, err = http.Get(server.URL + "/value/gauge/Temperature")
+	if err != nil {
+		resp.Body.Close()
+		fmt.Printf("Error getting metric: %v\n", err)
+	}
+
 	body, _ := io.ReadAll(resp.Body)
 
 	// 3. Получаем все метрики в HTML
-	htmlResp, _ := http.Get(server.URL + "/")
+	htmlResp, err := http.Get(server.URL + "/")
+	if err != nil {
+		fmt.Printf("Error getting all metrics in html: %v\n", err)
+	}
+	defer htmlResp.Body.Close()
 	htmlBody, _ := io.ReadAll(htmlResp.Body)
 
 	fmt.Printf("Metric value: %s\n", strings.TrimSpace(string(body)))
