@@ -3,6 +3,7 @@
 package memory
 
 import (
+	"context"
 	"sync"
 
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
@@ -20,17 +21,17 @@ type MemStorage struct {
 // определяет интерфейс хранилища метрик.
 type Storage interface {
 	// создает или обновляет метрику типа gauge.
-	UpsertGauge(name string, v float64) error
+	UpsertGauge(ctx context.Context, name string, v float64) error
 	// создает или обновляет метрику типа counter.
-	UpsertCounter(name string, d int64) error
+	UpsertCounter(ctx context.Context, name string, d int64) error
 	// возвращает значение метрики типа gauge по её имени.
-	GetGauge(name string) (float64, bool)
+	GetGauge(ctx context.Context, name string) (float64, bool)
 	// возвращает значение метрики типа counter по её имени.
-	GetCounter(name string) (int64, bool)
+	GetCounter(ctx context.Context, name string) (int64, bool)
 	// возвращает весь список метрик gauge и counter
-	GetAll() (map[string]float64, map[string]int64)
+	GetAll(ctx context.Context) (map[string]float64, map[string]int64)
 	// обновляет несколько метрик за одну операцию.
-	UpdateMetricsBatch(metrics []model.Metrics) error
+	UpdateMetricsBatch(ctx context.Context, metrics []model.Metrics) error
 	// освобождает ресурсы хранилища.
 	Close() error
 }
@@ -42,35 +43,35 @@ func New() *MemStorage {
 	}
 }
 
-func (m *MemStorage) UpsertGauge(id string, value float64) error {
+func (m *MemStorage) UpsertGauge(ctx context.Context, id string, value float64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.gauges[id] = value
 	return nil
 }
 
-func (m *MemStorage) UpsertCounter(id string, delta int64) error {
+func (m *MemStorage) UpsertCounter(ctx context.Context, id string, delta int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.counters[id] += delta
 	return nil
 }
 
-func (m *MemStorage) GetGauge(name string) (float64, bool) {
+func (m *MemStorage) GetGauge(ctx context.Context, name string) (float64, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	v, ok := m.gauges[name]
 	return v, ok
 }
 
-func (m *MemStorage) GetCounter(name string) (int64, bool) {
+func (m *MemStorage) GetCounter(ctx context.Context, name string) (int64, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	v, ok := m.counters[name]
 	return v, ok
 }
 
-func (m *MemStorage) GetAll() (map[string]float64, map[string]int64) {
+func (m *MemStorage) GetAll(ctx context.Context) (map[string]float64, map[string]int64) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -86,7 +87,7 @@ func (m *MemStorage) GetAll() (map[string]float64, map[string]int64) {
 
 	return gs, cs
 }
-func (m *MemStorage) UpdateMetricsBatch(metrics []model.Metrics) error {
+func (m *MemStorage) UpdateMetricsBatch(ctx context.Context, metrics []model.Metrics) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -53,12 +53,12 @@ func TestAuditMiddleware_Success(t *testing.T) {
 	testHandler := middleware(handler)
 
 	metrics := []model.Metrics{
-		{ID: "test1", MType: "gauge", Value: float64Ptr(1.5)},
-		{ID: "test2", MType: "counter", Delta: int64Ptr(10)},
+		{ID: "test1", MType: "gauge", Value: Ptr(1.5)},
+		{ID: "test2", MType: "counter", Delta: Ptr(int64(10))},
 	}
 
 	body, _ := json.Marshal(metrics)
-	req := httptest.NewRequest("POST", "/update", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(body))
 	req.RemoteAddr = "127.0.0.1:8080"
 	rr := httptest.NewRecorder()
 
@@ -96,7 +96,7 @@ func TestAuditMiddleware_InvalidJSON(t *testing.T) {
 	middleware := middleware.AuditMiddleware([]middleware.AuditReceiver{mockReceiver})
 	testHandler := middleware(handler)
 
-	req := httptest.NewRequest("POST", "/update", strings.NewReader("invalid json"))
+	req := httptest.NewRequest(http.MethodPost, "/update", strings.NewReader("invalid json"))
 	rr := httptest.NewRecorder()
 
 	testHandler.ServeHTTP(rr, req)
@@ -129,9 +129,9 @@ func TestAuditMiddleware_ReceiverError(t *testing.T) {
 	middleware := middleware.AuditMiddleware([]middleware.AuditReceiver{mockReceiver})
 	testHandler := middleware(handler)
 
-	metrics := []model.Metrics{{ID: "test", MType: "gauge", Value: float64Ptr(1.0)}}
+	metrics := []model.Metrics{{ID: "test", MType: "gauge", Value: Ptr(1.0)}}
 	body, _ := json.Marshal(metrics)
-	req := httptest.NewRequest("POST", "/update", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	testHandler.ServeHTTP(rr, req)
@@ -155,9 +155,9 @@ func TestAuditMiddleware_OnlyUpdateEndpoints(t *testing.T) {
 	testHandler := middleware(handler)
 
 	// Test /value endpoint - ДОЛЖЕН триггерить аудит (твоя логика)
-	metrics := []model.Metrics{{ID: "test", MType: "gauge", Value: float64Ptr(1.0)}}
+	metrics := []model.Metrics{{ID: "test", MType: "gauge", Value: Ptr(1.0)}}
 	body, _ := json.Marshal(metrics)
-	req := httptest.NewRequest("POST", "/value", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/value", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	testHandler.ServeHTTP(rr, req)
@@ -285,7 +285,7 @@ func TestAuditMiddleware_EmptyMetricsArray(t *testing.T) {
 	testHandler := middleware(handler)
 
 	body, _ := json.Marshal([]model.Metrics{}) // Пустой массив
-	req := httptest.NewRequest("POST", "/update", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	testHandler.ServeHTTP(rr, req)
@@ -315,7 +315,7 @@ func TestAuditMiddleware_RequestBodyReadError(t *testing.T) {
 	testHandler := middleware(handler)
 
 	// Создаем запрос с телом, которое вызовет ошибку при чтении
-	req := httptest.NewRequest("POST", "/update", errorReader{})
+	req := httptest.NewRequest(http.MethodPost, "/update", errorReader{})
 	rr := httptest.NewRecorder()
 
 	testHandler.ServeHTTP(rr, req)
@@ -329,13 +329,9 @@ func TestAuditMiddleware_RequestBodyReadError(t *testing.T) {
 	}
 }
 
-// Вспомогательные функции
-func float64Ptr(f float64) *float64 {
-	return &f
-}
-
-func int64Ptr(i int64) *int64 {
-	return &i
+// Вспомогательная функция
+func Ptr[T any](v T) *T {
+	return &v
 }
 
 func (errorReader) Read(p []byte) (n int, err error) {

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -130,6 +131,7 @@ func TestApplyEnv(t *testing.T) {
 		envVars     map[string]string
 		initialCfg  *Config
 		expectedCfg *Config
+		wantErr     bool
 	}{
 		{
 			name: "устанавливает все переменные окружения",
@@ -157,6 +159,7 @@ func TestApplyEnv(t *testing.T) {
 				DatabaseDSN:     "postgres://env:env@localhost:5432/db",
 				HashKey:         "env-secret",
 			},
+			wantErr: false,
 		},
 		{
 			name: "игнорирует некорректные числовые значения",
@@ -169,6 +172,7 @@ func TestApplyEnv(t *testing.T) {
 			expectedCfg: &Config{
 				StoreInterval: 300, // должно остаться прежним
 			},
+			wantErr: true,
 		},
 		{
 			name: "игнорирует некорректные булевы значения",
@@ -181,6 +185,7 @@ func TestApplyEnv(t *testing.T) {
 			expectedCfg: &Config{
 				Restore: true, // должно остаться прежним
 			},
+			wantErr: true,
 		},
 		{
 			name: "частичное обновление",
@@ -204,6 +209,7 @@ func TestApplyEnv(t *testing.T) {
 				DatabaseDSN:     "",
 				HashKey:         "secret",
 			},
+			wantErr: false,
 		},
 	}
 
@@ -211,17 +217,17 @@ func TestApplyEnv(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Устанавливаем переменные окружения
 			for key, value := range tt.envVars {
-				os.Setenv(key, value)
+				t.Setenv(key, value)
 			}
-			defer func() {
-				// Очищаем переменные окружения
-				for key := range tt.envVars {
-					os.Unsetenv(key)
-				}
-			}()
 
-			cfg := tt.initialCfg
-			cfg.applyEnv()
+			cfg := *tt.initialCfg
+			err := cleanenv.ReadEnv(&cfg)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 
 			assert.Equal(t, tt.expectedCfg.Address, cfg.Address)
 			assert.Equal(t, tt.expectedCfg.StoreInterval, cfg.StoreInterval)

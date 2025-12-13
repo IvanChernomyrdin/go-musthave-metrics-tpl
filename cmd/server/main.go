@@ -56,10 +56,13 @@ func main() {
 
 	svc := service.NewMetricsService(repo)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	// Загрузка из файла только если НЕ используется PostgreSQL
 	if !usePostgreSQL && cfg.Restore && cfg.FileStoragePath != "" {
 		customLogger.Infof("Загрузка метрик из файла: %s", cfg.FileStoragePath)
-		if err := svc.LoadFromFile(cfg.FileStoragePath); err != nil {
+		if err := svc.LoadFromFile(ctx, cfg.FileStoragePath); err != nil {
 			customLogger.Infof("Ошибка загрузки метрик: %v", err)
 		}
 	}
@@ -80,7 +83,7 @@ func main() {
 	if !usePostgreSQL && cfg.FileStoragePath != "" {
 		if cfg.StoreInterval > 0 {
 			DurationStoreInterval := time.Duration(cfg.StoreInterval) * time.Second
-			ticker = svc.StartPeriodicSaving(cfg.FileStoragePath, DurationStoreInterval)
+			ticker = svc.StartPeriodicSaving(ctx, cfg.FileStoragePath, DurationStoreInterval)
 			customLogger.Infof("Периодическое сохранение каждые %d секунд", cfg.StoreInterval)
 		} else {
 			r = svc.SaveOnUpdateMiddleware(cfg.FileStoragePath)(r)
@@ -89,8 +92,11 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:    cfg.Address,
-		Handler: r,
+		Addr:         cfg.Address,
+		Handler:      r,
+		ReadTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,
+		IdleTimeout:  time.Duration(cfg.IdleTimeout) * time.Second,
 	}
 
 	// Graceful shutdown
@@ -114,13 +120,10 @@ func main() {
 	// Сохранение в файл только если НЕ используется PostgreSQL
 	if !usePostgreSQL && cfg.FileStoragePath != "" {
 		customLogger.Info("Сохранение метрик...")
-		if err := svc.SaveToFile(cfg.FileStoragePath); err != nil {
+		if err := svc.SaveToFile(ctx, cfg.FileStoragePath); err != nil {
 			customLogger.Infof("Ошибка сохранения при завершении: %v", err)
 		}
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
 		customLogger.Fatalf("Принудительное завершение: %v", err)

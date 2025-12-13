@@ -3,6 +3,8 @@
 package mocks
 
 import (
+	context "context"
+
 	model "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 	mock "github.com/stretchr/testify/mock"
 )
@@ -13,7 +15,7 @@ type MetricsRepo struct {
 }
 
 // GetAll provides a mock function with no fields
-func (_m *MetricsRepo) GetAll() (map[string]float64, map[string]int64) {
+func (_m *MetricsRepo) GetAll(ctx context.Context) (map[string]float64, map[string]int64) {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
@@ -45,7 +47,7 @@ func (_m *MetricsRepo) GetAll() (map[string]float64, map[string]int64) {
 }
 
 // GetCounter provides a mock function with given fields: id
-func (_m *MetricsRepo) GetCounter(id string) (int64, bool) {
+func (_m *MetricsRepo) GetCounter(ctx context.Context, id string) (int64, bool) {
 	ret := _m.Called(id)
 
 	if len(ret) == 0 {
@@ -73,7 +75,7 @@ func (_m *MetricsRepo) GetCounter(id string) (int64, bool) {
 }
 
 // GetGauge provides a mock function with given fields: id
-func (_m *MetricsRepo) GetGauge(id string) (float64, bool) {
+func (_m *MetricsRepo) GetGauge(ctx context.Context, id string) (float64, bool) {
 	ret := _m.Called(id)
 
 	if len(ret) == 0 {
@@ -101,7 +103,7 @@ func (_m *MetricsRepo) GetGauge(id string) (float64, bool) {
 }
 
 // UpdateMetricsBatch provides a mock function with given fields: metrics
-func (_m *MetricsRepo) UpdateMetricsBatch(metrics []model.Metrics) error {
+func (_m *MetricsRepo) UpdateMetricsBatch(ctx context.Context, metrics []model.Metrics) error {
 	ret := _m.Called(metrics)
 
 	if len(ret) == 0 {
@@ -119,7 +121,7 @@ func (_m *MetricsRepo) UpdateMetricsBatch(metrics []model.Metrics) error {
 }
 
 // UpsertCounter provides a mock function with given fields: id, delta
-func (_m *MetricsRepo) UpsertCounter(id string, delta int64) error {
+func (_m *MetricsRepo) UpsertCounter(ctx context.Context, id string, delta int64) error {
 	ret := _m.Called(id, delta)
 
 	if len(ret) == 0 {
@@ -137,7 +139,7 @@ func (_m *MetricsRepo) UpsertCounter(id string, delta int64) error {
 }
 
 // UpsertGauge provides a mock function with given fields: id, value
-func (_m *MetricsRepo) UpsertGauge(id string, value float64) error {
+func (_m *MetricsRepo) UpsertGauge(ctx context.Context, id string, value float64) error {
 	ret := _m.Called(id, value)
 
 	if len(ret) == 0 {

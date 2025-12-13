@@ -12,7 +12,11 @@ import (
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config/db"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 	errPostgres "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/postgres/errors"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
+	sq "github.com/Masterminds/squirrel"
 )
+
+var customLogger = logger.NewHTTPLogger().Logger.Sugar()
 
 // конфиг для повторных попыток
 // для решения проблем с сбоями, сети или бд
@@ -37,41 +41,6 @@ type PostgresStorage struct {
 	retryConfig     RetryConfig                          // конфиг для повторной отправки операции
 	errorClassifier *errPostgres.PostgresErrorClassifier // классификация ошибок
 }
-
-// константные запросы обновления или создания метрик по типам
-const (
-	// использует INSERT ... ON CONFLICT ... DO UPDATE, для атомарности.
-	// Параметры:
-	//	$1 - идентификатор ID
-	//	$2 - тип метрики ("gauge")
-	//	$3 - значение метрики (число с плавающей точкой)
-	// при обновлении delta выставляет в null т.к. gauge значение хранится в value
-	upsertGaugeSQL = `
-		INSERT INTO metrics (id, mtype, value, delta) 
-		VALUES ($1, $2, $3, NULL)
-		ON CONFLICT (id) 
-		DO UPDATE SET 
-			value = $3,
-			delta = NULL,
-			updated_at = CURRENT_TIMESTAMP
-	`
-	// использует INSERT ... ON CONFLICT ... DO UPDATE, для атомарности.
-	// Параметры:
-	//	$1 - идентификатор ID
-	//	$2 - тип метрики ("counter")
-	//	$3 - значение метрики (целочисленное число)
-	// устанавливае value выставляет в null т.к. gauge значение хранится в delta
-	// при обновлении увеличивает текущее значение delta на входящее delta
-	upsertCounterSQL = `
-		INSERT INTO metrics (id, mtype, delta, value) 
-		VALUES ($1, $2, $3, NULL)
-		ON CONFLICT (id) 
-		DO UPDATE SET 
-			delta = COALESCE(metrics.delta, 0) + $3,
-			value = NULL,
-			updated_at = CURRENT_TIMESTAMP
-	`
-)
 
 // создаёт новый экземпляр PostgresStorage
 func New() *PostgresStorage {
@@ -98,13 +67,20 @@ func (p *PostgresStorage) Retry(ctx context.Context, operation func() error) err
 			return fmt.Errorf("неповторяемая ошибка: %w", err)
 		}
 
-		log.Printf("Попытка %d failed, retrying in %v: %v", attempt+1, delays[attempt], err)
-
+		var delay time.Duration
 		if attempt < len(delays) {
+			delay = delays[attempt]
+		} else {
+			delay = delays[len(delays)-1]
+		}
+
+		customLogger.Warnf("попытка %d failed, retrying in %v: %v", attempt+1, delay, err)
+
+		if attempt < p.retryConfig.MaxAttempts-1 {
 			select {
 			case <-ctx.Done():
 				return fmt.Errorf("операция отменена: %w", ctx.Err())
-			case <-time.After(delays[attempt]):
+			case <-time.After(delay):
 				// Ждем и переходим к следующей попытке
 			}
 		}
@@ -113,29 +89,58 @@ func (p *PostgresStorage) Retry(ctx context.Context, operation func() error) err
 	return fmt.Errorf("все %d попыток провалены, последняя ошибка: %w", p.retryConfig.MaxAttempts, lastErr)
 }
 
-func (p *PostgresStorage) UpsertGauge(id string, value float64) error {
-	return p.Retry(context.Background(), func() error {
-		_, err := p.db.Exec(upsertGaugeSQL, id, "gauge", value)
+func (p *PostgresStorage) UpsertGauge(ctx context.Context, id string, value float64) error {
+	return p.Retry(ctx, func() error {
+
+		query := sq.
+			Insert("metrics").
+			Columns("id", "mtype", "value", "delta").
+			Values(id, model.Gauge, value, nil).
+			Suffix(`ON CONFLICT (id) DO UPDATE SET 
+					value = EXCLUDED.value,
+					delta = NULL,
+					updated_at = CURRENT_TIMESTAMP`).
+			PlaceholderFormat(sq.Dollar)
+
+		sqlStr, args, err := query.ToSql()
 		if err != nil {
-			log.Printf("Ошибка сохранения gauge метрики: %v", err)
+			return fmt.Errorf("ошибка формирования запроса обновления gauge метрики: %w", err)
+		}
+
+		_, err = p.db.ExecContext(ctx, sqlStr, args...)
+		if err != nil {
+			customLogger.Warnf("Ошибка сохранения gauge метрики: %v", err)
 		}
 		return err
 	})
 }
 
-func (p *PostgresStorage) UpsertCounter(id string, delta int64) error {
-	return p.Retry(context.Background(), func() error {
-		_, err := p.db.Exec(upsertCounterSQL, id, "counter", delta)
+func (p *PostgresStorage) UpsertCounter(ctx context.Context, id string, delta int64) error {
+	return p.Retry(ctx, func() error {
+		query := sq.
+			Insert("metrics").
+			Columns("id", "mtype", "delta", "value").
+			Values(id, model.Counter, delta, nil).
+			Suffix(`ON CONFLICT (id) DO UPDATE SET
+            		delta = COALESCE(metrics.delta, 0) + EXCLUDED.delta,
+					value = NULL,
+            		updated_at = CURRENT_TIMESTAMP`).
+			PlaceholderFormat(sq.Dollar)
+		sqlStr, args, err := query.ToSql()
 		if err != nil {
-			log.Printf("Ошибка сохранения counter метрики: %v", err)
+			return fmt.Errorf("ошибка формирования запроса обновление counter метрики: %w", err)
+		}
+		_, err = p.db.ExecContext(ctx, sqlStr, args...)
+		if err != nil {
+			customLogger.Warnf("ошибка сохранения counter метрики: %v", err)
 		}
 		return err
 	})
 }
 
-func (p *PostgresStorage) GetGauge(id string) (float64, bool) {
+func (p *PostgresStorage) GetGauge(ctx context.Context, id string) (float64, bool) {
 	var value float64
-	err := p.db.QueryRow(
+	err := p.db.QueryRowContext(ctx,
 		"SELECT value FROM metrics WHERE mtype = $1 AND id = $2 AND value IS NOT NULL",
 		"gauge", id).Scan(&value)
 
@@ -150,9 +155,9 @@ func (p *PostgresStorage) GetGauge(id string) (float64, bool) {
 	return value, true
 }
 
-func (p *PostgresStorage) GetCounter(id string) (int64, bool) {
+func (p *PostgresStorage) GetCounter(ctx context.Context, id string) (int64, bool) {
 	var value int64
-	err := p.db.QueryRow(
+	err := p.db.QueryRowContext(ctx,
 		"SELECT delta FROM metrics WHERE mtype = $1 AND id = $2 AND delta IS NOT NULL",
 		"counter", id).Scan(&value)
 
@@ -167,51 +172,51 @@ func (p *PostgresStorage) GetCounter(id string) (int64, bool) {
 	return value, true
 }
 
-func (p *PostgresStorage) GetAll() (map[string]float64, map[string]int64) {
+func (p *PostgresStorage) GetAll(ctx context.Context) (map[string]float64, map[string]int64) {
 	gauges := make(map[string]float64)
 	counters := make(map[string]int64)
 
 	// Получаем все gauge метрики
-	rows, err := p.db.Query(
+	rowsGauge, err := p.db.QueryContext(ctx,
 		"SELECT id, value FROM metrics WHERE mtype = 'gauge' AND value IS NOT NULL")
 	if err != nil {
 		log.Printf("Ошибка получения gauge метрик: %v", err)
 		return gauges, counters
 	}
-	defer rows.Close()
+	defer rowsGauge.Close()
 
-	for rows.Next() {
+	for rowsGauge.Next() {
 		var id string
 		var value float64
-		if err := rows.Scan(&id, &value); err != nil {
+		if err := rowsGauge.Scan(&id, &value); err != nil {
 			log.Printf("Ошибка сканирования gauge метрики: %v", err)
 			continue
 		}
 		gauges[id] = value
 	}
-	if err := rows.Err(); err != nil {
+	if err := rowsGauge.Err(); err != nil {
 		log.Printf("Ошибка при итерации gauge метрик: %v", err)
 	}
 
 	// Получаем все counter метрики
-	rows, err = p.db.Query(
+	rowsCounter, err := p.db.QueryContext(ctx,
 		"SELECT id, delta FROM metrics WHERE mtype = 'counter' AND delta IS NOT NULL")
 	if err != nil {
 		log.Printf("Ошибка получения counter метрик: %v", err)
 		return gauges, counters
 	}
-	defer rows.Close()
+	defer rowsCounter.Close()
 
-	for rows.Next() {
+	for rowsCounter.Next() {
 		var id string
 		var value int64
-		if err := rows.Scan(&id, &value); err != nil {
+		if err := rowsCounter.Scan(&id, &value); err != nil {
 			log.Printf("Ошибка сканирования counter метрики: %v", err)
 			continue
 		}
 		counters[id] = value
 	}
-	if err := rows.Err(); err != nil {
+	if err := rowsCounter.Err(); err != nil {
 		log.Printf("Ошибка при итерации counter метрик: %v", err)
 	}
 
@@ -219,12 +224,15 @@ func (p *PostgresStorage) GetAll() (map[string]float64, map[string]int64) {
 }
 
 func (p *PostgresStorage) Close() error {
-	return nil
+	if p.db == nil {
+		return nil
+	}
+	return p.db.Close()
 }
 
-func (p *PostgresStorage) UpdateMetricsBatch(metrics []model.Metrics) error {
-	return p.Retry(context.Background(), func() error {
-		tx, err := p.db.Begin()
+func (p *PostgresStorage) UpdateMetricsBatch(ctx context.Context, metrics []model.Metrics) error {
+	return p.Retry(ctx, func() error {
+		tx, err := p.db.BeginTx(ctx, nil)
 		if err != nil {
 			return err
 		}
@@ -233,15 +241,40 @@ func (p *PostgresStorage) UpdateMetricsBatch(metrics []model.Metrics) error {
 		for _, metric := range metrics {
 			switch metric.MType {
 			case model.Gauge:
-				_, err := tx.Exec(upsertGaugeSQL, metric.ID, "gauge", *metric.Value)
+				query := sq.
+					Insert("metrics").
+					Columns("id", "mtype", "value", "delta").
+					Values(metric.ID, model.Gauge, *metric.Value, nil).
+					Suffix(`ON CONFLICT (id) DO UPDATE SET 
+							value = EXCLUDED.value,
+							delta = NULL,
+							updated_at = CURRENT_TIMESTAMP`).
+					PlaceholderFormat(sq.Dollar)
+
+				sqlStr, args, err := query.ToSql()
 				if err != nil {
-					return err
+					return fmt.Errorf("ошибка формирования запроса обновления gauge метрики: %w", err)
+				}
+				if _, err = tx.ExecContext(ctx, sqlStr, args...); err != nil {
+					return fmt.Errorf("ошибка сохранения gauge метрики: %v", err)
 				}
 
 			case model.Counter:
-				_, err := tx.Exec(upsertCounterSQL, metric.ID, "counter", *metric.Delta)
+				query := sq.
+					Insert("metrics").
+					Columns("id", "mtype", "delta", "value").
+					Values(metric.ID, model.Counter, *metric.Delta, nil).
+					Suffix(`ON CONFLICT (id) DO UPDATE SET
+            				delta = COALESCE(metrics.delta, 0) + EXCLUDED.delta,
+							value = NULL,
+            				updated_at = CURRENT_TIMESTAMP`).
+					PlaceholderFormat(sq.Dollar)
+				sqlStr, args, err := query.ToSql()
 				if err != nil {
-					return err
+					return fmt.Errorf("ошибка формирования запроса обновление counter метрики: %w", err)
+				}
+				if _, err = tx.ExecContext(ctx, sqlStr, args...); err != nil {
+					return fmt.Errorf("ошибка сохранения counter метрики: %v", err)
 				}
 			}
 		}

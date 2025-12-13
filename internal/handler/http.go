@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -54,7 +55,7 @@ func (h *Handler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	if r.Body != nil && r.ContentLength > 0 {
 		var metric model.Metrics
 		if err := json.NewDecoder(r.Body).Decode(&metric); err == nil {
-			if err := h.processMetric(metric); err != nil {
+			if err := h.processMetric(r.Context(), metric); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -91,7 +92,7 @@ func (h *Handler) processURLParams(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "bad gauge value", http.StatusBadRequest)
 			return
 		}
-		if err := h.svc.UpdateGauge(id, f); err != nil {
+		if err := h.svc.UpdateGauge(r.Context(), id, f); err != nil {
 			http.Error(w, "store error", http.StatusInternalServerError)
 			return
 		}
@@ -102,7 +103,7 @@ func (h *Handler) processURLParams(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "bad counter value", http.StatusBadRequest)
 			return
 		}
-		if err := h.svc.UpdateCounter(id, d); err != nil {
+		if err := h.svc.UpdateCounter(r.Context(), id, d); err != nil {
 			http.Error(w, "store error", http.StatusInternalServerError)
 			return
 		}
@@ -116,7 +117,7 @@ func (h *Handler) processURLParams(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("OK"))
 }
 
-func (h *Handler) processMetric(metric model.Metrics) error {
+func (h *Handler) processMetric(ctx context.Context, metric model.Metrics) error {
 	if metric.ID == "" {
 		return fmt.Errorf("metric ID is required")
 	}
@@ -126,13 +127,13 @@ func (h *Handler) processMetric(metric model.Metrics) error {
 		if metric.Value == nil {
 			return fmt.Errorf("gauge value is required")
 		}
-		return h.svc.UpdateGauge(metric.ID, *metric.Value)
+		return h.svc.UpdateGauge(ctx, metric.ID, *metric.Value)
 
 	case service.Counter:
 		if metric.Delta == nil {
 			return fmt.Errorf("counter delta is required")
 		}
-		return h.svc.UpdateCounter(metric.ID, *metric.Delta)
+		return h.svc.UpdateCounter(ctx, metric.ID, *metric.Delta)
 
 	default:
 		return fmt.Errorf("unknown metric type: %s", metric.MType)
@@ -164,7 +165,7 @@ func (h *Handler) GetValue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	val, found, typeOK := h.svc.GetValue(mtype, name)
+	val, found, typeOK := h.svc.GetValue(r.Context(), mtype, name)
 	if !typeOK {
 		http.Error(w, "bad metric type", http.StatusBadRequest)
 		return
@@ -176,7 +177,7 @@ func (h *Handler) GetValue(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(val))
+	w.Write([]byte(val))
 }
 
 // GetAll godoc
@@ -188,7 +189,7 @@ func (h *Handler) GetValue(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Ошибка сервера"
 // @Router / [get]
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
-	all := h.svc.AllText()
+	all := h.svc.AllText(r.Context())
 
 	const tpl = `<!doctype html>
 	<html><head><meta charset="utf-8"><title>metrics</title></head>
@@ -250,7 +251,7 @@ func (h *Handler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
 	// Получаем значение метрики из хранилища и добавляем в response
 	switch reqMetric.MType {
 	case service.Gauge:
-		value, exists := h.svc.GetGauge(reqMetric.ID)
+		value, exists := h.svc.GetGauge(r.Context(), reqMetric.ID)
 		if !exists {
 			w.WriteHeader(http.StatusNotFound)
 			json.NewEncoder(w).Encode(map[string]string{"error": "metric not found"})
@@ -259,7 +260,7 @@ func (h *Handler) GetValueJSON(w http.ResponseWriter, r *http.Request) {
 		response.Value = &value
 
 	case service.Counter:
-		value, exists := h.svc.GetCounter(reqMetric.ID)
+		value, exists := h.svc.GetCounter(r.Context(), reqMetric.ID)
 		if !exists {
 			w.WriteHeader(http.StatusNotFound)
 			json.NewEncoder(w).Encode(map[string]string{"error": "metric not found"})
@@ -356,7 +357,7 @@ func (h *Handler) UpdateMetricsBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, metric := range metrics {
-		if err := h.processMetric(metric); err != nil {
+		if err := h.processMetric(r.Context(), metric); err != nil {
 			log.Printf("Error updating metric %s: %v", metric.ID, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to update metric %s, err: %s", metric.ID, err)})

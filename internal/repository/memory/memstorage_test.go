@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"testing"
 
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
@@ -12,25 +13,25 @@ func TestMemStorage_UpsertGauge(t *testing.T) {
 	storage := New()
 
 	t.Run("добавляет новый gauge", func(t *testing.T) {
-		err := storage.UpsertGauge("temperature", 25.5)
+		err := storage.UpsertGauge(context.Background(), "temperature", 25.5)
 		require.NoError(t, err)
 
-		value, ok := storage.GetGauge("temperature")
+		value, ok := storage.GetGauge(context.Background(), "temperature")
 		assert.True(t, ok)
 		assert.Equal(t, 25.5, value)
 	})
 
 	t.Run("перезаписывает существующий gauge", func(t *testing.T) {
-		err := storage.UpsertGauge("temperature", 30.0)
+		err := storage.UpsertGauge(context.Background(), "temperature", 30.0)
 		require.NoError(t, err)
 
-		value, ok := storage.GetGauge("temperature")
+		value, ok := storage.GetGauge(context.Background(), "temperature")
 		assert.True(t, ok)
 		assert.Equal(t, 30.0, value)
 	})
 
 	t.Run("возвращает false для несуществующего gauge", func(t *testing.T) {
-		_, ok := storage.GetGauge("nonexistent")
+		_, ok := storage.GetGauge(context.Background(), "nonexistent")
 		assert.False(t, ok)
 	})
 }
@@ -39,28 +40,28 @@ func TestMemStorage_UpsertCounter(t *testing.T) {
 	storage := New()
 
 	t.Run("добавляет новый counter", func(t *testing.T) {
-		err := storage.UpsertCounter("requests", 1)
+		err := storage.UpsertCounter(context.Background(), "requests", 1)
 		require.NoError(t, err)
 
-		value, ok := storage.GetCounter("requests")
+		value, ok := storage.GetCounter(context.Background(), "requests")
 		assert.True(t, ok)
 		assert.Equal(t, int64(1), value)
 	})
 
 	t.Run("инкрементирует существующий counter", func(t *testing.T) {
-		err := storage.UpsertCounter("requests", 2)
+		err := storage.UpsertCounter(context.Background(), "requests", 2)
 		require.NoError(t, err)
 
-		value, ok := storage.GetCounter("requests")
+		value, ok := storage.GetCounter(context.Background(), "requests")
 		assert.True(t, ok)
 		assert.Equal(t, int64(3), value) // 1 + 2 = 3
 	})
 
 	t.Run("работает с отрицательными значениями", func(t *testing.T) {
-		err := storage.UpsertCounter("errors", -5)
+		err := storage.UpsertCounter(context.Background(), "errors", -5)
 		require.NoError(t, err)
 
-		value, ok := storage.GetCounter("errors")
+		value, ok := storage.GetCounter(context.Background(), "errors")
 		assert.True(t, ok)
 		assert.Equal(t, int64(-5), value)
 	})
@@ -69,13 +70,13 @@ func TestMemStorage_UpsertCounter(t *testing.T) {
 func TestMemStorage_GetAll(t *testing.T) {
 	storage := New()
 
-	storage.UpsertGauge("temperature", 25.5)
-	storage.UpsertGauge("pressure", 1013.2)
-	storage.UpsertCounter("requests", 10)
-	storage.UpsertCounter("errors", 2)
+	storage.UpsertGauge(context.Background(), "temperature", 25.5)
+	storage.UpsertGauge(context.Background(), "pressure", 1013.2)
+	storage.UpsertCounter(context.Background(), "requests", 10)
+	storage.UpsertCounter(context.Background(), "errors", 2)
 
 	t.Run("возвращает все gauge и counter", func(t *testing.T) {
-		gauges, counters := storage.GetAll()
+		gauges, counters := storage.GetAll(context.Background())
 
 		assert.Len(t, gauges, 2)
 		assert.Equal(t, 25.5, gauges["temperature"])
@@ -87,15 +88,15 @@ func TestMemStorage_GetAll(t *testing.T) {
 	})
 
 	t.Run("возвращает копии мап", func(t *testing.T) {
-		gauges, counters := storage.GetAll()
+		gauges, counters := storage.GetAll(context.Background())
 
 		gauges["temperature"] = 99.9
 		counters["requests"] = 999
 
-		value, _ := storage.GetGauge("temperature")
+		value, _ := storage.GetGauge(context.Background(), "temperature")
 		assert.Equal(t, 25.5, value) // оригинал не изменился
 
-		value2, _ := storage.GetCounter("requests")
+		value2, _ := storage.GetCounter(context.Background(), "requests")
 		assert.Equal(t, int64(10), value2) // оригинал не изменился
 	})
 }
@@ -127,18 +128,18 @@ func TestMemStorage_UpdateMetricsBatch(t *testing.T) {
 	}
 
 	t.Run("пакетное обновление работает корректно", func(t *testing.T) {
-		err := storage.UpdateMetricsBatch(metrics)
+		err := storage.UpdateMetricsBatch(context.Background(), metrics)
 		require.NoError(t, err)
 
-		temp, ok := storage.GetGauge("temperature")
+		temp, ok := storage.GetGauge(context.Background(), "temperature")
 		assert.True(t, ok)
 		assert.Equal(t, 25.5, temp)
 
-		pressure, ok := storage.GetGauge("pressure")
+		pressure, ok := storage.GetGauge(context.Background(), "pressure")
 		assert.True(t, ok)
 		assert.Equal(t, 1013.2, pressure)
 
-		requests, ok := storage.GetCounter("requests")
+		requests, ok := storage.GetCounter(context.Background(), "requests")
 		assert.True(t, ok)
 		assert.Equal(t, int64(8), requests) // 5 + 3 = 8
 	})
@@ -157,13 +158,13 @@ func TestMemStorage_UpdateMetricsBatch(t *testing.T) {
 			},
 		}
 
-		err := storage.UpdateMetricsBatch(metricsWithNil)
+		err := storage.UpdateMetricsBatch(context.Background(), metricsWithNil)
 		require.NoError(t, err)
 
-		_, ok := storage.GetGauge("test_gauge")
+		_, ok := storage.GetGauge(context.Background(), "test_gauge")
 		assert.False(t, ok)
 
-		_, ok = storage.GetCounter("test_counter")
+		_, ok = storage.GetCounter(context.Background(), "test_counter")
 		assert.False(t, ok)
 	})
 }
@@ -181,8 +182,8 @@ func TestMemStorage_ConcurrentAccess(t *testing.T) {
 			go func(id int) {
 				for j := 0; j < iterations; j++ {
 					value := float64(id*1000 + j)
-					storage.UpsertGauge("concurrent_gauge", value)
-					storage.GetGauge("concurrent_gauge")
+					storage.UpsertGauge(context.Background(), "concurrent_gauge", value)
+					storage.GetGauge(context.Background(), "concurrent_gauge")
 				}
 				done <- true
 			}(i)
@@ -193,7 +194,7 @@ func TestMemStorage_ConcurrentAccess(t *testing.T) {
 		}
 
 		// Проверяем что нет паники и можно получить значение
-		value, ok := storage.GetGauge("concurrent_gauge")
+		value, ok := storage.GetGauge(context.Background(), "concurrent_gauge")
 		assert.True(t, ok)
 		assert.NotZero(t, value)
 	})
@@ -204,8 +205,8 @@ func TestMemStorage_ConcurrentAccess(t *testing.T) {
 		for i := 0; i < goroutines; i++ {
 			go func() {
 				for j := 0; j < iterations; j++ {
-					storage.UpsertCounter("concurrent_counter", 1)
-					storage.GetCounter("concurrent_counter")
+					storage.UpsertCounter(context.Background(), "concurrent_counter", 1)
+					storage.GetCounter(context.Background(), "concurrent_counter")
 				}
 				done <- true
 			}()
@@ -215,7 +216,7 @@ func TestMemStorage_ConcurrentAccess(t *testing.T) {
 			<-done
 		}
 
-		value, ok := storage.GetCounter("concurrent_counter")
+		value, ok := storage.GetCounter(context.Background(), "concurrent_counter")
 		assert.True(t, ok)
 		assert.Equal(t, int64(goroutines*iterations), value)
 	})
@@ -233,10 +234,10 @@ func TestMemStorage_Close(t *testing.T) {
 		storage := New()
 		storage.Close()
 
-		err := storage.UpsertGauge("test", 1.0)
+		err := storage.UpsertGauge(context.Background(), "test", 1.0)
 		assert.NoError(t, err)
 
-		value, ok := storage.GetGauge("test")
+		value, ok := storage.GetGauge(context.Background(), "test")
 		assert.True(t, ok)
 		assert.Equal(t, 1.0, value)
 	})
@@ -246,7 +247,7 @@ func TestMemStorage_New(t *testing.T) {
 	t.Run("создает пустое хранилище", func(t *testing.T) {
 		storage := New()
 
-		gauges, counters := storage.GetAll()
+		gauges, counters := storage.GetAll(context.Background())
 		assert.Empty(t, gauges)
 		assert.Empty(t, counters)
 	})
@@ -255,11 +256,11 @@ func TestMemStorage_New(t *testing.T) {
 		storage1 := New()
 		storage2 := New()
 
-		storage1.UpsertGauge("temp", 25.0)
-		storage2.UpsertGauge("temp", 30.0)
+		storage1.UpsertGauge(context.Background(), "temp", 25.0)
+		storage2.UpsertGauge(context.Background(), "temp", 30.0)
 
-		val1, _ := storage1.GetGauge("temp")
-		val2, _ := storage2.GetGauge("temp")
+		val1, _ := storage1.GetGauge(context.Background(), "temp")
+		val2, _ := storage2.GetGauge(context.Background(), "temp")
 
 		assert.Equal(t, 25.0, val1)
 		assert.Equal(t, 30.0, val2)

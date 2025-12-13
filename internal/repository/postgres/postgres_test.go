@@ -134,7 +134,7 @@ func TestPostgresStorage_UpsertGauge(t *testing.T) {
 			WithArgs("temperature", "gauge", 25.5).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
-		err := storage.UpsertGauge("temperature", 25.5)
+		err := storage.UpsertGauge(context.Background(), "temperature", 25.5)
 		assert.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -144,7 +144,7 @@ func TestPostgresStorage_UpsertGauge(t *testing.T) {
 			WithArgs("pressure", "gauge", 1013.2).
 			WillReturnError(errors.New("db error"))
 
-		err := storage.UpsertGauge("pressure", 1013.2)
+		err := storage.UpsertGauge(context.Background(), "pressure", 1013.2)
 		assert.Error(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -158,7 +158,7 @@ func TestPostgresStorage_UpsertGauge(t *testing.T) {
 			WithArgs("test", "gauge", 1.0).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
-		err := storage.UpsertGauge("test", 1.0)
+		err := storage.UpsertGauge(context.Background(), "test", 1.0)
 		assert.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -177,7 +177,7 @@ func TestPostgresStorage_UpsertCounter(t *testing.T) {
 			WithArgs("requests", "counter", int64(5)).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
-		err := storage.UpsertCounter("requests", 5)
+		err := storage.UpsertCounter(context.Background(), "requests", 5)
 		assert.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -187,7 +187,7 @@ func TestPostgresStorage_UpsertCounter(t *testing.T) {
 			WithArgs("errors", "counter", int64(1)).
 			WillReturnError(errors.New("db error"))
 
-		err := storage.UpsertCounter("errors", 1)
+		err := storage.UpsertCounter(context.Background(), "errors", 1)
 		assert.Error(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -206,7 +206,7 @@ func TestPostgresStorage_GetGauge(t *testing.T) {
 			WithArgs("gauge", "temperature").
 			WillReturnRows(rows)
 
-		value, ok := storage.GetGauge("temperature")
+		value, ok := storage.GetGauge(context.Background(), "temperature")
 		assert.True(t, ok)
 		assert.Equal(t, 25.5, value)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -217,7 +217,7 @@ func TestPostgresStorage_GetGauge(t *testing.T) {
 			WithArgs("gauge", "nonexistent").
 			WillReturnError(sql.ErrNoRows)
 
-		value, ok := storage.GetGauge("nonexistent")
+		value, ok := storage.GetGauge(context.Background(), "nonexistent")
 		assert.False(t, ok)
 		assert.Equal(t, 0.0, value)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -237,7 +237,7 @@ func TestPostgresStorage_GetCounter(t *testing.T) {
 			WithArgs("counter", "requests").
 			WillReturnRows(rows)
 
-		value, ok := storage.GetCounter("requests")
+		value, ok := storage.GetCounter(context.Background(), "requests")
 		assert.True(t, ok)
 		assert.Equal(t, int64(100), value)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -248,7 +248,7 @@ func TestPostgresStorage_GetCounter(t *testing.T) {
 			WithArgs("counter", "nonexistent").
 			WillReturnError(sql.ErrNoRows)
 
-		value, ok := storage.GetCounter("nonexistent")
+		value, ok := storage.GetCounter(context.Background(), "nonexistent")
 		assert.False(t, ok)
 		assert.Equal(t, int64(0), value)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -275,7 +275,7 @@ func TestPostgresStorage_GetAll(t *testing.T) {
 		mock.ExpectQuery("SELECT id, delta FROM metrics WHERE mtype = 'counter' AND delta IS NOT NULL").
 			WillReturnRows(counterRows)
 
-		gauges, counters := storage.GetAll()
+		gauges, counters := storage.GetAll(context.Background())
 
 		assert.Len(t, gauges, 2)
 		assert.Equal(t, 25.5, gauges["temperature"])
@@ -296,7 +296,7 @@ func TestPostgresStorage_GetAll(t *testing.T) {
 		mock.ExpectQuery("SELECT id, delta FROM metrics WHERE mtype = 'counter' AND delta IS NOT NULL").
 			WillReturnRows(counterRows)
 
-		gauges, counters := storage.GetAll()
+		gauges, counters := storage.GetAll(context.Background())
 		assert.Empty(t, gauges)
 		assert.Empty(t, counters)
 		assert.NoError(t, mock.ExpectationsWereMet())
@@ -334,7 +334,7 @@ func TestPostgresStorage_UpdateMetricsBatch(t *testing.T) {
 			},
 		}
 
-		err := storage.UpdateMetricsBatch(metrics)
+		err := storage.UpdateMetricsBatch(context.Background(), metrics)
 		assert.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -354,7 +354,7 @@ func TestPostgresStorage_UpdateMetricsBatch(t *testing.T) {
 			},
 		}
 
-		err := storage.UpdateMetricsBatch(metrics)
+		err := storage.UpdateMetricsBatch(context.Background(), metrics)
 		assert.Error(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -384,7 +384,7 @@ func TestPostgresStorage_UpdateMetricsBatch(t *testing.T) {
 			},
 		}
 
-		err := storage.UpdateMetricsBatch(metrics)
+		err := storage.UpdateMetricsBatch(context.Background(), metrics)
 		assert.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})

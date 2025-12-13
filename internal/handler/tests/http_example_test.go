@@ -4,8 +4,8 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,9 +14,12 @@ import (
 	handlertest "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/handler"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/memory"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/service"
 	"github.com/go-chi/chi/v5"
 )
+
+var customLogger = logger.NewHTTPLogger().Logger.Sugar()
 
 // createTestServer создает тестовый HTTP сервер с настроенными маршрутами
 func createTestServer(h *handlertest.Handler) *httptest.Server {
@@ -54,15 +57,15 @@ func ExampleHandler_UpdateMetric_legacyFormat() {
 		nil,
 	)
 	if err != nil {
-		fmt.Printf("Ошибка отправки запроса: %v\n", err)
+		customLogger.Fatalf("Ошибка отправки запроса: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	// Проверка ответа
 	body, _ := io.ReadAll(resp.Body)
-	fmt.Printf("Status: %d\n", resp.StatusCode)
-	fmt.Printf("Response: %s\n", strings.TrimSpace(string(body)))
+	customLogger.Infof("Status: %d\n", resp.StatusCode)
+	customLogger.Infof("Response: %s\n", strings.TrimSpace(string(body)))
 
 	// Output:
 	// Status: 200
@@ -96,7 +99,7 @@ func ExampleHandler_UpdateMetric_jsonFormat() {
 		bytes.NewReader(jsonData),
 	)
 	if err != nil {
-		fmt.Printf("Ошибка отправки запроса: %v\n", err)
+		customLogger.Fatalf("Ошибка отправки запроса: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -104,8 +107,8 @@ func ExampleHandler_UpdateMetric_jsonFormat() {
 	// Чтение ответа
 	var response map[string]string
 	json.NewDecoder(resp.Body).Decode(&response)
-	fmt.Printf("Status: %d\n", resp.StatusCode)
-	fmt.Printf("Response status: %s\n", response["status"])
+	customLogger.Infof("Status: %d\n", resp.StatusCode)
+	customLogger.Infof("Response status: %s\n", response["status"])
 
 	// Output:
 	// Status: 200
@@ -120,7 +123,7 @@ func ExampleHandler_GetValue() {
 	h := handlertest.NewHandler(svc)
 
 	// Сначала добавляем метрику
-	svc.UpdateGauge("Alloc", 1234.56)
+	svc.UpdateGauge(context.Background(), "Alloc", 1234.56)
 
 	server := createTestServer(h)
 	defer server.Close()
@@ -128,14 +131,14 @@ func ExampleHandler_GetValue() {
 	// Получение значения метрики
 	resp, err := http.Get(server.URL + "/value/gauge/Alloc")
 	if err != nil {
-		fmt.Printf("Ошибка получения метрики: %v\n", err)
+		customLogger.Fatalf("Ошибка получения метрики: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	fmt.Printf("Status: %d\n", resp.StatusCode)
-	fmt.Printf("Value: %s\n", strings.TrimSpace(string(body)))
+	customLogger.Infof("Status: %d\n", resp.StatusCode)
+	customLogger.Infof("Value: %s\n", strings.TrimSpace(string(body)))
 
 	// Output:
 	// Status: 200
@@ -150,7 +153,7 @@ func ExampleHandler_GetValueJSON() {
 	h := handlertest.NewHandler(svc)
 
 	// Добавляем тестовую метрику
-	svc.UpdateGauge("Alloc", 1234.56)
+	svc.UpdateGauge(context.Background(), "Alloc", 1234.56)
 
 	server := createTestServer(h)
 	defer server.Close()
@@ -170,7 +173,7 @@ func ExampleHandler_GetValueJSON() {
 		bytes.NewReader(jsonData),
 	)
 	if err != nil {
-		fmt.Printf("Ошибка отправки запроса: %v\n", err)
+		customLogger.Fatalf("Ошибка отправки запроса: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -178,8 +181,8 @@ func ExampleHandler_GetValueJSON() {
 	// Декодирование ответа
 	var metric model.Metrics
 	json.NewDecoder(resp.Body).Decode(&metric)
-	fmt.Printf("Status: %d\n", resp.StatusCode)
-	fmt.Printf("Found metric: ID=%s, Type=%s, Value=%.2f\n",
+	customLogger.Infof("Status: %d\n", resp.StatusCode)
+	customLogger.Infof("Found metric: ID=%s, Type=%s, Value=%.2f\n",
 		metric.ID, metric.MType, *metric.Value)
 
 	// Output:
@@ -220,15 +223,15 @@ func ExampleHandler_UpdateMetricsBatch() {
 		bytes.NewReader(jsonData),
 	)
 	if err != nil {
-		fmt.Printf("Ошибка отправки запроса: %v\n", err)
+		customLogger.Fatalf("Ошибка отправки запроса: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	var response map[string]string
 	json.NewDecoder(resp.Body).Decode(&response)
-	fmt.Printf("Status: %d\n", resp.StatusCode)
-	fmt.Printf("Batch update status: %s\n", response["status"])
+	customLogger.Infof("Status: %d\n", resp.StatusCode)
+	customLogger.Infof("Batch update status: %s\n", response["status"])
 
 	// Output:
 	// Status: 200
@@ -243,8 +246,8 @@ func ExampleHandler_GetAll() {
 	h := handlertest.NewHandler(svc)
 
 	// Добавляем тестовые метрики
-	svc.UpdateGauge("Alloc", 1234.56)
-	svc.UpdateCounter("PollCount", 42)
+	svc.UpdateGauge(context.Background(), "Alloc", 1234.56)
+	svc.UpdateCounter(context.Background(), "PollCount", 42)
 
 	server := createTestServer(h)
 	defer server.Close()
@@ -252,7 +255,7 @@ func ExampleHandler_GetAll() {
 	// Запрос всех метрик
 	resp, err := http.Get(server.URL + "/")
 	if err != nil {
-		fmt.Printf("Ошибка получения метрик: %v\n", err)
+		customLogger.Fatalf("Ошибка получения метрик: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -261,11 +264,11 @@ func ExampleHandler_GetAll() {
 	html := string(body)
 
 	// Проверяем наличие ключевых элементов в HTML
-	fmt.Printf("Status: %d\n", resp.StatusCode)
-	fmt.Printf("Content-Type: %s\n", resp.Header.Get("Content-Type"))
-	fmt.Printf("Contains 'Metrics': %v\n", strings.Contains(html, "Metrics"))
-	fmt.Printf("Contains 'Alloc': %v\n", strings.Contains(html, "Alloc"))
-	fmt.Printf("Contains 'PollCount': %v\n", strings.Contains(html, "PollCount"))
+	customLogger.Infof("Status: %d\n", resp.StatusCode)
+	customLogger.Infof("Content-Type: %s\n", resp.Header.Get("Content-Type"))
+	customLogger.Infof("Contains 'Metrics': %v\n", strings.Contains(html, "Metrics"))
+	customLogger.Infof("Contains 'Alloc': %v\n", strings.Contains(html, "Alloc"))
+	customLogger.Infof("Contains 'PollCount': %v\n", strings.Contains(html, "PollCount"))
 
 	// Output:
 	// Status: 200
@@ -291,14 +294,14 @@ func ExampleHandler_UpdateMetric_errorHandling() {
 		nil,
 	)
 	if err != nil {
-		fmt.Printf("Ошибка отправки запроса: %v\n", err)
+		customLogger.Fatalf("Ошибка отправки запроса: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	fmt.Printf("Status: %d\n", resp.StatusCode)
-	fmt.Printf("Error message: %s\n", strings.TrimSpace(string(body)))
+	customLogger.Infof("Status: %d\n", resp.StatusCode)
+	customLogger.Infof("Error message: %s\n", strings.TrimSpace(string(body)))
 
 	// Output:
 	// Status: 400
@@ -330,7 +333,7 @@ func ExampleHandler_workflow() {
 	resp, err = http.Get(server.URL + "/value/gauge/Temperature")
 	if err != nil {
 		resp.Body.Close()
-		fmt.Printf("Error getting metric: %v\n", err)
+		customLogger.Fatalf("Error getting metric: %v\n", err)
 	}
 
 	body, _ := io.ReadAll(resp.Body)
@@ -338,13 +341,13 @@ func ExampleHandler_workflow() {
 	// 3. Получаем все метрики в HTML
 	htmlResp, err := http.Get(server.URL + "/")
 	if err != nil {
-		fmt.Printf("Error getting all metrics in html: %v\n", err)
+		customLogger.Fatalf("Error getting all metrics in html: %v\n", err)
 	}
 	defer htmlResp.Body.Close()
 	htmlBody, _ := io.ReadAll(htmlResp.Body)
 
-	fmt.Printf("Metric value: %s\n", strings.TrimSpace(string(body)))
-	fmt.Printf("HTML contains metric: %v\n", strings.Contains(string(htmlBody), "Temperature"))
+	customLogger.Infof("Metric value: %s\n", strings.TrimSpace(string(body)))
+	customLogger.Infof("HTML contains metric: %v\n", strings.Contains(string(htmlBody), "Temperature"))
 
 	// Output:
 	// Metric value: 23.5

@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -24,7 +25,7 @@ func TestMetricsService_UpdateGauge(t *testing.T) {
 	t.Run("успешное обновление gauge", func(t *testing.T) {
 		mockRepo.On("UpsertGauge", "testGauge", 123.45).Return(nil).Once()
 
-		err := service.UpdateGauge("testGauge", 123.45)
+		err := service.UpdateGauge(context.Background(), "testGauge", 123.45)
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
 	})
@@ -33,7 +34,7 @@ func TestMetricsService_UpdateGauge(t *testing.T) {
 		expectedErr := fmt.Errorf("storage error")
 		mockRepo.On("UpsertGauge", "testGauge", 123.45).Return(expectedErr).Once()
 
-		err := service.UpdateGauge("testGauge", 123.45)
+		err := service.UpdateGauge(context.Background(), "testGauge", 123.45)
 		assert.Equal(t, expectedErr, err)
 		mockRepo.AssertExpectations(t)
 	})
@@ -46,7 +47,7 @@ func TestMetricsService_UpdateCounter(t *testing.T) {
 	t.Run("успешное обновление counter", func(t *testing.T) {
 		mockRepo.On("UpsertCounter", "testCounter", int64(100)).Return(nil).Once()
 
-		err := service.UpdateCounter("testCounter", 100)
+		err := service.UpdateCounter(context.Background(), "testCounter", 100)
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
 	})
@@ -55,7 +56,7 @@ func TestMetricsService_UpdateCounter(t *testing.T) {
 		expectedErr := fmt.Errorf("storage error")
 		mockRepo.On("UpsertCounter", "testCounter", int64(100)).Return(expectedErr).Once()
 
-		err := service.UpdateCounter("testCounter", 100)
+		err := service.UpdateCounter(context.Background(), "testCounter", 100)
 		assert.Equal(t, expectedErr, err)
 		mockRepo.AssertExpectations(t)
 	})
@@ -148,7 +149,7 @@ func TestMetricsService_GetValue(t *testing.T) {
 				tt.setupMock(mockRepo)
 			}
 
-			val, found, valid := service.GetValue(tt.mtype, tt.metricName)
+			val, found, valid := service.GetValue(context.Background(), tt.mtype, tt.metricName)
 			assert.Equal(t, tt.expectedVal, val)
 			assert.Equal(t, tt.expectedOK, found)
 			assert.Equal(t, tt.expectedValid, valid)
@@ -174,7 +175,7 @@ func TestMetricsService_AllText(t *testing.T) {
 
 		mockRepo.On("GetAll").Return(gauges, counters).Once()
 
-		result := service.AllText()
+		result := service.AllText(context.Background())
 
 		expected := map[string]string{
 			"gauge.gauge1":     "123.45",
@@ -190,7 +191,7 @@ func TestMetricsService_AllText(t *testing.T) {
 	t.Run("пустые метрики", func(t *testing.T) {
 		mockRepo.On("GetAll").Return(map[string]float64{}, map[string]int64{}).Once()
 
-		result := service.AllText()
+		result := service.AllText(context.Background())
 
 		assert.Empty(t, result)
 		mockRepo.AssertExpectations(t)
@@ -204,7 +205,7 @@ func TestMetricsService_GetGauge(t *testing.T) {
 	t.Run("получение существующего gauge", func(t *testing.T) {
 		mockRepo.On("GetGauge", "testGauge").Return(123.45, true).Once()
 
-		val, found := service.GetGauge("testGauge")
+		val, found := service.GetGauge(context.Background(), "testGauge")
 		assert.Equal(t, 123.45, val)
 		assert.True(t, found)
 		mockRepo.AssertExpectations(t)
@@ -213,7 +214,7 @@ func TestMetricsService_GetGauge(t *testing.T) {
 	t.Run("получение несуществующего gauge", func(t *testing.T) {
 		mockRepo.On("GetGauge", "nonexistent").Return(0.0, false).Once()
 
-		val, found := service.GetGauge("nonexistent")
+		val, found := service.GetGauge(context.Background(), "nonexistent")
 		assert.Equal(t, 0.0, val)
 		assert.False(t, found)
 		mockRepo.AssertExpectations(t)
@@ -227,7 +228,7 @@ func TestMetricsService_GetCounter(t *testing.T) {
 	t.Run("получение существующего counter", func(t *testing.T) {
 		mockRepo.On("GetCounter", "testCounter").Return(int64(100), true).Once()
 
-		val, found := service.GetCounter("testCounter")
+		val, found := service.GetCounter(context.Background(), "testCounter")
 		assert.Equal(t, int64(100), val)
 		assert.True(t, found)
 		mockRepo.AssertExpectations(t)
@@ -236,7 +237,7 @@ func TestMetricsService_GetCounter(t *testing.T) {
 	t.Run("получение несуществующего counter", func(t *testing.T) {
 		mockRepo.On("GetCounter", "nonexistent").Return(int64(0), false).Once()
 
-		val, found := service.GetCounter("nonexistent")
+		val, found := service.GetCounter(context.Background(), "nonexistent")
 		assert.Equal(t, int64(0), val)
 		assert.False(t, found)
 		mockRepo.AssertExpectations(t)
@@ -263,7 +264,7 @@ func TestMetricsService_UpdateMetricsBatch(t *testing.T) {
 
 		mockRepo.On("UpdateMetricsBatch", metrics).Return(nil).Once()
 
-		err := service.UpdateMetricsBatch(metrics)
+		err := service.UpdateMetricsBatch(context.Background(), metrics)
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
 	})
@@ -280,7 +281,7 @@ func TestMetricsService_UpdateMetricsBatch(t *testing.T) {
 		expectedErr := fmt.Errorf("batch update error")
 		mockRepo.On("UpdateMetricsBatch", metrics).Return(expectedErr).Once()
 
-		err := service.UpdateMetricsBatch(metrics)
+		err := service.UpdateMetricsBatch(context.Background(), metrics)
 		assert.Equal(t, expectedErr, err)
 		mockRepo.AssertExpectations(t)
 	})
@@ -304,7 +305,7 @@ func TestMetricsService_SaveToFile(t *testing.T) {
 
 		mockRepo.On("GetAll").Return(gauges, counters).Once()
 
-		err := service.SaveToFile(filename)
+		err := service.SaveToFile(context.Background(), filename)
 		assert.NoError(t, err)
 
 		// Проверяем что файл создан
@@ -315,7 +316,7 @@ func TestMetricsService_SaveToFile(t *testing.T) {
 	})
 
 	t.Run("пустой filename - пропускаем сохранение", func(t *testing.T) {
-		err := service.SaveToFile("")
+		err := service.SaveToFile(context.Background(), "")
 		assert.NoError(t, err)
 		// Не должно быть вызовов к репозиторию
 	})
@@ -326,7 +327,7 @@ func TestMetricsService_SaveToFile(t *testing.T) {
 
 		mockRepo.On("GetAll").Return(map[string]float64{}, map[string]int64{}).Once()
 
-		err := service.SaveToFile(filename)
+		err := service.SaveToFile(context.Background(), filename)
 		assert.NoError(t, err)
 
 		// Проверяем что файл создан
@@ -371,7 +372,7 @@ func TestMetricsService_LoadFromFile(t *testing.T) {
 		mockRepo.On("UpsertGauge", "gauge1", 123.45).Return(nil).Once()
 		mockRepo.On("UpsertCounter", "counter1", int64(100)).Return(nil).Once()
 
-		err = service.LoadFromFile(filename)
+		err = service.LoadFromFile(context.Background(), filename)
 		assert.NoError(t, err)
 
 		mockRepo.AssertExpectations(t)
@@ -381,13 +382,13 @@ func TestMetricsService_LoadFromFile(t *testing.T) {
 		tmpDir := t.TempDir()
 		filename := filepath.Join(tmpDir, "nonexistent.json")
 
-		err := service.LoadFromFile(filename)
+		err := service.LoadFromFile(context.Background(), filename)
 		assert.NoError(t, err)
 		// Не должно быть вызовов к репозиторию
 	})
 
 	t.Run("пустой filename - пропускаем загрузку", func(t *testing.T) {
-		err := service.LoadFromFile("")
+		err := service.LoadFromFile(context.Background(), "")
 		assert.NoError(t, err)
 		// Не должно быть вызовов к репозиторию
 	})
@@ -482,7 +483,7 @@ func TestMetricsService_StartPeriodicSaving(t *testing.T) {
 		// Мокаем сохранение в файл
 		mockRepo.On("GetAll").Return(map[string]float64{}, map[string]int64{}).Twice()
 
-		ticker := service.StartPeriodicSaving(filename, 100*time.Millisecond)
+		ticker := service.StartPeriodicSaving(context.Background(), filename, 100*time.Millisecond)
 		defer ticker.Stop()
 
 		// Ждем немного чтобы тикер сработал

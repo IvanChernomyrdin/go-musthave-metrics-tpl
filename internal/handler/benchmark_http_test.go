@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -15,7 +16,7 @@ func BenchmarkUpdateGauge(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		svc.UpdateGauge("test", float64(i))
+		svc.UpdateGauge(context.Background(), "test", float64(i))
 	}
 }
 
@@ -25,7 +26,7 @@ func BenchmarkUpdateCounter(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		svc.UpdateCounter("test", int64(i))
+		svc.UpdateCounter(context.Background(), "test", int64(i))
 	}
 }
 
@@ -34,15 +35,15 @@ func BenchmarkUpdateMetricsBatch(b *testing.B) {
 	svc := service.NewMetricsService(storage)
 
 	metrics := []model.Metrics{
-		{ID: "test1", MType: model.Gauge, Value: float64Ptr(1.5)},
-		{ID: "test2", MType: model.Counter, Delta: int64Ptr(10)},
-		{ID: "test3", MType: model.Gauge, Value: float64Ptr(3.14)},
-		{ID: "test4", MType: model.Counter, Delta: int64Ptr(5)},
+		{ID: "test1", MType: model.Gauge, Value: Ptr(1.5)},
+		{ID: "test2", MType: model.Counter, Delta: Ptr(int64(10))},
+		{ID: "test3", MType: model.Gauge, Value: Ptr(3.14)},
+		{ID: "test4", MType: model.Counter, Delta: Ptr(int64(5))},
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		svc.UpdateMetricsBatch(metrics)
+		svc.UpdateMetricsBatch(context.Background(), metrics)
 	}
 }
 
@@ -57,7 +58,7 @@ func BenchmarkUpdateGaugeDifferentKeys(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		svc.UpdateGauge(keys[i%1000], float64(i))
+		svc.UpdateGauge(context.Background(), keys[i%1000], float64(i))
 	}
 }
 
@@ -72,9 +73,10 @@ func BenchmarkUpdateCounterDifferentKeys(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		svc.UpdateCounter(keys[i%1000], int64(i))
+		svc.UpdateCounter(context.Background(), keys[i%1000], int64(i))
 	}
 }
 
-func float64Ptr(f float64) *float64 { return &f }
-func int64Ptr(i int64) *int64       { return &i }
+func Ptr[T any](v T) *T {
+	return &v
+}

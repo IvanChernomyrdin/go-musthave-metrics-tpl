@@ -5,23 +5,32 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
+
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
+	"github.com/ilyakaznacheev/cleanenv"
 )
 
 type Config struct {
-	Address         string
-	StoreInterval   int
-	FileStoragePath string
-	Restore         bool
-	DatabaseDSN     string
-	HashKey         string
-	AuditFile       string
-	AuditURL        string
+	Address         string `env:"ADDRESS"`
+	StoreInterval   int    `env:"STORE_INTERVAL"`
+	FileStoragePath string `env:"FILE_STORAGE_PATH"`
+	Restore         bool   `env:"RESTORE"`
+	DatabaseDSN     string `env:"DATABASE_DSN"`
+	HashKey         string `env:"KEY"`
+	AuditFile       string `env:"AUDIT_FILE"`
+	AuditURL        string `env:"AUDIT_URL"`
+	ReadTimeout     int    `env:"READ_TIMEOUT"`
+	WriteTimeout    int    `env:"WRITE_TIMEOUT"`
+	IdleTimeout     int    `env:"IDLE_TIMEOUT"`
 }
 
 func Load() *Config {
-	cfg := &Config{}
+	cfg := &Config{
+		ReadTimeout:  10,
+		WriteTimeout: 10,
+		IdleTimeout:  10,
+	}
 
 	defaultFileStoragePath := filepath.Join(os.TempDir(), "metrics.json")
 
@@ -29,46 +38,17 @@ func Load() *Config {
 	flag.IntVar(&cfg.StoreInterval, "i", 300, "интервал сохранения в секундах")
 	flag.StringVar(&cfg.FileStoragePath, "f", defaultFileStoragePath, "путь к файлу метрик")
 	flag.BoolVar(&cfg.Restore, "r", true, "загружать метрики при запуске")
-	flag.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "Database connection string")
+	flag.StringVar(&cfg.DatabaseDSN, "d", "", "Database connection string")
 	flag.StringVar(&cfg.HashKey, "k", "", "ключ подписики по алгоритму sha256")
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "audit path logs file")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "audit url push logs")
 	flag.Parse()
 
-	cfg.applyEnv()
+	if err := cleanenv.ReadEnv(cfg); err != nil {
+		logger.NewHTTPLogger().Logger.Sugar().Fatalf("failed to read env into config: %v", err)
+	}
 
 	return cfg
-}
-
-func (cfg *Config) applyEnv() {
-	if envAddr := os.Getenv("ADDRESS"); envAddr != "" {
-		cfg.Address = envAddr
-	}
-	if envInterval := os.Getenv("STORE_INTERVAL"); envInterval != "" {
-		if interval, err := strconv.Atoi(envInterval); err == nil {
-			cfg.StoreInterval = interval
-		}
-	}
-	if envPath := os.Getenv("FILE_STORAGE_PATH"); envPath != "" {
-		cfg.FileStoragePath = envPath
-	}
-	if envRestore := os.Getenv("RESTORE"); envRestore != "" {
-		if restore, err := strconv.ParseBool(envRestore); err == nil {
-			cfg.Restore = restore
-		}
-	}
-	if envDSN := os.Getenv("DATABASE_DSN"); envDSN != "" {
-		cfg.DatabaseDSN = envDSN
-	}
-	if envHashKey := os.Getenv("KEY"); envHashKey != "" {
-		cfg.HashKey = envHashKey
-	}
-	if envAuditFile := os.Getenv("AUDIT_FILE"); envAuditFile != "" {
-		cfg.AuditFile = envAuditFile
-	}
-	if envAuditURL := os.Getenv("AUDIT_URL"); envAuditURL != "" {
-		cfg.AuditURL = envAuditURL
-	}
 }
 
 // переводим

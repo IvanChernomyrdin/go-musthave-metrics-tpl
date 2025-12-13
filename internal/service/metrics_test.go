@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -56,7 +57,7 @@ func TestMetricsService_UpdateGauge(t *testing.T) {
 
 			mockRepo.On("UpsertGauge", tt.id, tt.value).Return(nil)
 
-			err := service.UpdateGauge(tt.id, tt.value)
+			err := service.UpdateGauge(context.Background(), tt.id, tt.value)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -103,7 +104,7 @@ func TestMetricsService_UpdateCounter(t *testing.T) {
 
 			mockRepo.On("UpsertCounter", tt.id, tt.delta).Return(nil)
 
-			err := service.UpdateCounter(tt.id, tt.delta)
+			err := service.UpdateCounter(context.Background(), tt.id, tt.delta)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -125,13 +126,13 @@ func TestMetricsService_GetGauge(t *testing.T) {
 	mockRepo.On("GetGauge", "non_existing_gauge").Return(0.0, false)
 
 	t.Run("existing gauge", func(t *testing.T) {
-		value, ok := service.GetGauge("existing_gauge")
+		value, ok := service.GetGauge(context.Background(), "existing_gauge")
 		assert.True(t, ok)
 		assert.Equal(t, expectedValue, value)
 	})
 
 	t.Run("non-existing gauge", func(t *testing.T) {
-		value, ok := service.GetGauge("non_existing_gauge")
+		value, ok := service.GetGauge(context.Background(), "non_existing_gauge")
 		assert.False(t, ok)
 		assert.Equal(t, 0.0, value)
 	})
@@ -148,13 +149,13 @@ func TestMetricsService_GetCounter(t *testing.T) {
 	mockRepo.On("GetCounter", "non_existing_counter").Return(int64(0), false)
 
 	t.Run("existing counter", func(t *testing.T) {
-		value, ok := service.GetCounter("existing_counter")
+		value, ok := service.GetCounter(context.Background(), "existing_counter")
 		assert.True(t, ok)
 		assert.Equal(t, expectedValue, value)
 	})
 
 	t.Run("non-existing counter", func(t *testing.T) {
-		value, ok := service.GetCounter("non_existing_counter")
+		value, ok := service.GetCounter(context.Background(), "non_existing_counter")
 		assert.False(t, ok)
 		assert.Equal(t, int64(0), value)
 	})
@@ -245,7 +246,7 @@ func TestMetricsService_GetValue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.mockSetup()
 
-			result, ok, valid := service.GetValue(tt.mtype, tt.metricName)
+			result, ok, valid := service.GetValue(context.Background(), tt.mtype, tt.metricName)
 
 			assert.Equal(t, tt.expected, result)
 			assert.Equal(t, tt.expectedOk, ok)
@@ -272,7 +273,7 @@ func TestMetricsService_AllText(t *testing.T) {
 
 	mockRepo.On("GetAll").Return(gauges, counters)
 
-	result := service.AllText()
+	result := service.AllText(context.Background())
 
 	expected := map[string]string{
 		"gauge.cpu_usage":   "75.5",
@@ -304,7 +305,7 @@ func TestMetricsService_UpdateMetricsBatch(t *testing.T) {
 
 	mockRepo.On("UpdateMetricsBatch", metrics).Return(nil)
 
-	err := service.UpdateMetricsBatch(metrics)
+	err := service.UpdateMetricsBatch(context.Background(), metrics)
 	assert.NoError(t, err)
 
 	mockRepo.AssertExpectations(t)
@@ -352,7 +353,7 @@ func TestMetricsService_SaveToFile(t *testing.T) {
 			if tt.filename != "" {
 				tempDir := t.TempDir()
 				fullPath := filepath.Join(tempDir, tt.filename)
-				err := service.SaveToFile(fullPath)
+				err := service.SaveToFile(context.Background(), fullPath)
 
 				if tt.wantErr {
 					assert.Error(t, err)
@@ -363,7 +364,7 @@ func TestMetricsService_SaveToFile(t *testing.T) {
 					assert.NoError(t, err)
 				}
 			} else {
-				err := service.SaveToFile(tt.filename)
+				err := service.SaveToFile(context.Background(), tt.filename)
 				if tt.wantErr {
 					assert.Error(t, err)
 				} else {
@@ -423,7 +424,7 @@ func TestMetricsService_LoadFromFile(t *testing.T) {
 
 			tt.setup(mockRepo)
 
-			err := service.LoadFromFile(tt.filename)
+			err := service.LoadFromFile(context.Background(), tt.filename)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -452,7 +453,7 @@ func TestMetricsService_StartPeriodicSaving(t *testing.T) {
 	counters := map[string]int64{"counter": 1}
 	mockRepo.On("GetAll").Return(gauges, counters).Times(3)
 
-	ticker := service.StartPeriodicSaving(filename, interval)
+	ticker := service.StartPeriodicSaving(context.Background(), filename, interval)
 	defer ticker.Stop()
 
 	time.Sleep(350 * time.Millisecond)
