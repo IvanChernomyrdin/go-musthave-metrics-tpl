@@ -371,10 +371,10 @@ func (s *HTTPSender) sendBatch(ctx context.Context, metrics []model.Metrics) err
 
 	var compressionBuf bytes.Buffer
 	gz := gzip.NewWriter(&compressionBuf)
-	if _, err := gz.Write(data); err != nil {
+	if _, err = gz.Write(data); err != nil {
 		return fmt.Errorf("failed to compress batch: %w", err)
 	}
-	if err := gz.Close(); err != nil {
+	if err = gz.Close(); err != nil {
 		return fmt.Errorf("failed to close gzip: %w", err)
 	}
 

@@ -1,3 +1,4 @@
+// Package config
 package config
 
 import (
@@ -126,6 +127,16 @@ func TestLoad(t *testing.T) {
 }
 
 func TestApplyEnv(t *testing.T) {
+	for _, key := range []string{
+		"ADDRESS",
+		"STORE_INTERVAL",
+		"FILE_STORAGE_PATH",
+		"RESTORE",
+		"DATABASE_DSN",
+		"KEY",
+	} {
+		_ = os.Unsetenv(key)
+	}
 	tests := []struct {
 		name        string
 		envVars     map[string]string

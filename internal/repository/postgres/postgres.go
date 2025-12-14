@@ -1,4 +1,4 @@
-// пакет postgres содержит реализацию хранилища на базе Postgres.
+// Package postgres содержит реализацию хранилища на базе Postgres.
 // предоставляет надёжное, устойчивое к ошибкам подключение, с поддержкой повторных попыток и классификацией ошибок.
 package postgres
 
@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config/db"
@@ -148,7 +147,7 @@ func (p *PostgresStorage) GetGauge(ctx context.Context, id string) (float64, boo
 		return 0, false
 	}
 	if err != nil {
-		log.Printf("Ошибка получения gauge метрики: %v", err)
+		customLogger.Warnf("Ошибка получения gauge метрики: %v", err)
 		return 0, false
 	}
 
@@ -165,7 +164,7 @@ func (p *PostgresStorage) GetCounter(ctx context.Context, id string) (int64, boo
 		return 0, false
 	}
 	if err != nil {
-		log.Printf("Ошибка получения counter метрики: %v", err)
+		customLogger.Warnf("Ошибка получения counter метрики: %v", err)
 		return 0, false
 	}
 
@@ -180,7 +179,7 @@ func (p *PostgresStorage) GetAll(ctx context.Context) (map[string]float64, map[s
 	rowsGauge, err := p.db.QueryContext(ctx,
 		"SELECT id, value FROM metrics WHERE mtype = 'gauge' AND value IS NOT NULL")
 	if err != nil {
-		log.Printf("Ошибка получения gauge метрик: %v", err)
+		customLogger.Warnf("Ошибка получения gauge метрик: %v", err)
 		return gauges, counters
 	}
 	defer rowsGauge.Close()
@@ -188,21 +187,21 @@ func (p *PostgresStorage) GetAll(ctx context.Context) (map[string]float64, map[s
 	for rowsGauge.Next() {
 		var id string
 		var value float64
-		if err := rowsGauge.Scan(&id, &value); err != nil {
-			log.Printf("Ошибка сканирования gauge метрики: %v", err)
+		if err = rowsGauge.Scan(&id, &value); err != nil {
+			customLogger.Warnf("Ошибка сканирования gauge метрики: %v", err)
 			continue
 		}
 		gauges[id] = value
 	}
-	if err := rowsGauge.Err(); err != nil {
-		log.Printf("Ошибка при итерации gauge метрик: %v", err)
+	if err = rowsGauge.Err(); err != nil {
+		customLogger.Warnf("Ошибка при итерации gauge метрик: %v", err)
 	}
 
 	// Получаем все counter метрики
 	rowsCounter, err := p.db.QueryContext(ctx,
 		"SELECT id, delta FROM metrics WHERE mtype = 'counter' AND delta IS NOT NULL")
 	if err != nil {
-		log.Printf("Ошибка получения counter метрик: %v", err)
+		customLogger.Warnf("Ошибка получения counter метрик: %v", err)
 		return gauges, counters
 	}
 	defer rowsCounter.Close()
@@ -210,14 +209,14 @@ func (p *PostgresStorage) GetAll(ctx context.Context) (map[string]float64, map[s
 	for rowsCounter.Next() {
 		var id string
 		var value int64
-		if err := rowsCounter.Scan(&id, &value); err != nil {
-			log.Printf("Ошибка сканирования counter метрики: %v", err)
+		if err = rowsCounter.Scan(&id, &value); err != nil {
+			customLogger.Warnf("Ошибка сканирования counter метрики: %v", err)
 			continue
 		}
 		counters[id] = value
 	}
-	if err := rowsCounter.Err(); err != nil {
-		log.Printf("Ошибка при итерации counter метрик: %v", err)
+	if err = rowsCounter.Err(); err != nil {
+		customLogger.Warnf("Ошибка при итерации counter метрик: %v", err)
 	}
 
 	return gauges, counters
@@ -256,7 +255,7 @@ func (p *PostgresStorage) UpdateMetricsBatch(ctx context.Context, metrics []mode
 					return fmt.Errorf("ошибка формирования запроса обновления gauge метрики: %w", err)
 				}
 				if _, err = tx.ExecContext(ctx, sqlStr, args...); err != nil {
-					return fmt.Errorf("ошибка сохранения gauge метрики: %v", err)
+					return fmt.Errorf("ошибка сохранения gauge метрики: %w", err)
 				}
 
 			case model.Counter:
@@ -274,7 +273,7 @@ func (p *PostgresStorage) UpdateMetricsBatch(ctx context.Context, metrics []mode
 					return fmt.Errorf("ошибка формирования запроса обновление counter метрики: %w", err)
 				}
 				if _, err = tx.ExecContext(ctx, sqlStr, args...); err != nil {
-					return fmt.Errorf("ошибка сохранения counter метрики: %v", err)
+					return fmt.Errorf("ошибка сохранения counter метрики: %w", err)
 				}
 			}
 		}

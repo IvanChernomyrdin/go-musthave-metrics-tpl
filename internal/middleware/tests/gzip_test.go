@@ -1,3 +1,4 @@
+// Package tests
 package tests
 
 import (
@@ -21,7 +22,8 @@ func TestGzipDecompression(t *testing.T) {
 
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Received: " + string(body)))
+		_, err = w.Write([]byte("Received: " + string(body)))
+		require.NoError(t, err)
 	})
 
 	middleware := mw.GzipDecompression(testHandler)
@@ -76,9 +78,13 @@ func TestGzipDecompression(t *testing.T) {
 			if tt.compress {
 				var buf bytes.Buffer
 				gz := gzip.NewWriter(&buf)
-				_, err := gz.Write([]byte(tt.content))
+
+				var err error
+				_, err = gz.Write([]byte(tt.content))
 				require.NoError(t, err)
-				require.NoError(t, gz.Close())
+				err = gz.Close()
+				require.NoError(t, err)
+
 				bodyBytes = buf.Bytes()
 			} else {
 				bodyBytes = []byte(tt.content)
@@ -107,7 +113,9 @@ func TestGzipCompression(t *testing.T) {
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World! This is a test response with some content."))
+
+		_, err := w.Write([]byte("Hello, World! This is a test response with some content."))
+		require.NoError(t, err)
 	})
 
 	middleware := mw.GzipCompression(testHandler)
@@ -177,11 +185,16 @@ func TestGzipCompression(t *testing.T) {
 					body := rr.Body.Bytes()
 
 					// Попробуем распаковать
-					reader, err := gzip.NewReader(bytes.NewReader(body))
+					var err error
+					var reader *gzip.Reader
+					reader, err = gzip.NewReader(bytes.NewReader(body))
 					if err == nil {
-						decompressed, err := io.ReadAll(reader)
+						var decompressed []byte
+						decompressed, err = io.ReadAll(reader)
 						require.NoError(t, err)
-						reader.Close()
+
+						err = reader.Close()
+						require.NoError(t, err)
 
 						// Проверяем что распакованные данные содержат оригинальный текст
 						assert.Contains(t, string(decompressed), "Hello, World!")
@@ -202,7 +215,10 @@ func TestGzipResponseWriter(t *testing.T) {
 	t.Run("Write и WriteHeader работают правильно", func(t *testing.T) {
 		var buf bytes.Buffer
 		gz := gzip.NewWriter(&buf)
-		defer gz.Close()
+		defer func() {
+			err := gz.Close()
+			require.NoError(t, err)
+		}()
 
 		rr := httptest.NewRecorder()
 		grw := mw.GzipResponseWriter{
@@ -245,7 +261,8 @@ func TestGzipCompression_ErrorHandling(t *testing.T) {
 	t.Run("ошибка создания gzip writer не ломает обработку", func(t *testing.T) {
 		// Создаем хендлер, который не должен сжиматься при ошибке
 		testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("plain response"))
+			_, err := w.Write([]byte("plain response"))
+			require.NoError(t, err)
 		})
 
 		middleware := mw.GzipCompression(testHandler)
@@ -273,7 +290,8 @@ func TestGzipMiddleware_Chain(t *testing.T) {
 
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
-			w.Write(body)
+			_, err = w.Write(body)
+			require.NoError(t, err)
 		})
 
 		// Создаем цепочку middleware: декомпрессия -> хендлер -> компрессия
@@ -288,9 +306,13 @@ func TestGzipMiddleware_Chain(t *testing.T) {
 		// Сжимаем данные для отправки
 		var compressedInput bytes.Buffer
 		gzIn := gzip.NewWriter(&compressedInput)
-		_, err := gzIn.Write([]byte(testData))
+
+		var err error
+		_, err = gzIn.Write([]byte(testData))
 		require.NoError(t, err)
-		require.NoError(t, gzIn.Close())
+
+		err = gzIn.Close()
+		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodPost, "/echo", &compressedInput)
 		req.Header.Set("Content-Encoding", "gzip")
@@ -305,11 +327,16 @@ func TestGzipMiddleware_Chain(t *testing.T) {
 		assert.Equal(t, "gzip", rr.Header().Get("Content-Encoding"))
 
 		// Распаковываем ответ
-		gzOut, err := gzip.NewReader(rr.Body)
+		var gzOut *gzip.Reader
+		gzOut, err = gzip.NewReader(rr.Body)
 		require.NoError(t, err)
-		decompressedOutput, err := io.ReadAll(gzOut)
+
+		var decompressedOutput []byte
+		decompressedOutput, err = io.ReadAll(gzOut)
 		require.NoError(t, err)
-		require.NoError(t, gzOut.Close())
+
+		err = gzOut.Close()
+		require.NoError(t, err)
 
 		assert.Equal(t, testData, string(decompressedOutput))
 	})
@@ -319,7 +346,8 @@ func TestGzipDecompression_ContentLength(t *testing.T) {
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Проверяем что Content-Length установлен правильно
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, err := w.Write([]byte("OK"))
+		require.NoError(t, err)
 	})
 
 	middleware := mw.GzipDecompression(testHandler)
@@ -330,9 +358,13 @@ func TestGzipDecompression_ContentLength(t *testing.T) {
 		// Сжимаем данные
 		var buf bytes.Buffer
 		gz := gzip.NewWriter(&buf)
-		_, err := gz.Write([]byte(testData))
+
+		var err error
+		_, err = gz.Write([]byte(testData))
 		require.NoError(t, err)
-		require.NoError(t, gz.Close())
+
+		err = gz.Close()
+		require.NoError(t, err)
 
 		compressedData := buf.Bytes()
 

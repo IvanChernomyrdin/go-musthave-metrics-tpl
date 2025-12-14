@@ -1,3 +1,4 @@
+// Package tests
 package tests
 
 func float64Ptr(f float64) *float64 {

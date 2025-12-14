@@ -1,4 +1,4 @@
-// config/config.go
+// Package config
 package config
 
 import (
@@ -45,7 +45,7 @@ func Load() *Config {
 	flag.Parse()
 
 	if err := cleanenv.ReadEnv(cfg); err != nil {
-		logger.NewHTTPLogger().Logger.Sugar().Fatalf("failed to read env into config: %v", err)
+		logger.NewHTTPLogger().Logger.Sugar().Errorf("failed to read env into config: %v", err)
 	}
 
 	return cfg

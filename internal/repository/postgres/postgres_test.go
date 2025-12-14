@@ -1,3 +1,4 @@
+// Package postgres
 package postgres
 
 import (
@@ -85,7 +86,7 @@ func TestRetryWithPostgresErrors(t *testing.T) {
 
 		callCount := 0
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("test", "gauge", 1.0).
+			WithArgs("test", "gauge", 1.0, sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		err := storage.Retry(context.Background(), func() error {
@@ -105,7 +106,7 @@ func TestRetryWithPostgresErrors(t *testing.T) {
 
 		callCount := 0
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("test2", "gauge", 2.0).
+			WithArgs("test2", "gauge", 2.0, sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		err := storage.Retry(context.Background(), func() error {
@@ -131,7 +132,7 @@ func TestPostgresStorage_UpsertGauge(t *testing.T) {
 
 	t.Run("успешное сохранение gauge", func(t *testing.T) {
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("temperature", "gauge", 25.5).
+			WithArgs("temperature", "gauge", 25.5, sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		err := storage.UpsertGauge(context.Background(), "temperature", 25.5)
@@ -141,7 +142,7 @@ func TestPostgresStorage_UpsertGauge(t *testing.T) {
 
 	t.Run("ошибка при сохранении gauge", func(t *testing.T) {
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("pressure", "gauge", 1013.2).
+			WithArgs("pressure", "gauge", 1013.2, sqlmock.AnyArg()).
 			WillReturnError(errors.New("db error"))
 
 		err := storage.UpsertGauge(context.Background(), "pressure", 1013.2)
@@ -152,10 +153,10 @@ func TestPostgresStorage_UpsertGauge(t *testing.T) {
 	t.Run("retry при временной ошибке PostgreSQL", func(t *testing.T) {
 		pgErr := &pgconn.PgError{Code: "08000"}
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("test", "gauge", 1.0).
+			WithArgs("test", "gauge", 1.0, sqlmock.AnyArg()).
 			WillReturnError(pgErr)
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("test", "gauge", 1.0).
+			WithArgs("test", "gauge", 1.0, sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		err := storage.UpsertGauge(context.Background(), "test", 1.0)
@@ -174,7 +175,7 @@ func TestPostgresStorage_UpsertCounter(t *testing.T) {
 
 	t.Run("успешное сохранение counter", func(t *testing.T) {
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("requests", "counter", int64(5)).
+			WithArgs("requests", "counter", int64(5), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		err := storage.UpsertCounter(context.Background(), "requests", 5)
@@ -184,7 +185,7 @@ func TestPostgresStorage_UpsertCounter(t *testing.T) {
 
 	t.Run("ошибка при сохранении counter", func(t *testing.T) {
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("errors", "counter", int64(1)).
+			WithArgs("errors", "counter", int64(1), sqlmock.AnyArg()).
 			WillReturnError(errors.New("db error"))
 
 		err := storage.UpsertCounter(context.Background(), "errors", 1)
@@ -314,10 +315,10 @@ func TestPostgresStorage_UpdateMetricsBatch(t *testing.T) {
 	t.Run("успешное пакетное обновление", func(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("temperature", "gauge", 25.5).
+			WithArgs("temperature", "gauge", 25.5, sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("requests", "counter", int64(10)).
+			WithArgs("requests", "counter", int64(10), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -342,7 +343,7 @@ func TestPostgresStorage_UpdateMetricsBatch(t *testing.T) {
 	t.Run("откат транзакции при ошибке", func(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("test", "gauge", 1.0).
+			WithArgs("test", "gauge", 1.0, sqlmock.AnyArg()).
 			WillReturnError(errors.New("db error"))
 		mock.ExpectRollback()
 
@@ -365,14 +366,14 @@ func TestPostgresStorage_UpdateMetricsBatch(t *testing.T) {
 		// Первая попытка
 		mock.ExpectBegin()
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("test", "gauge", 1.0).
+			WithArgs("test", "gauge", 1.0, sqlmock.AnyArg()).
 			WillReturnError(pgErr)
 		mock.ExpectRollback()
 
 		// Вторая попытка
 		mock.ExpectBegin()
 		mock.ExpectExec("INSERT INTO metrics").
-			WithArgs("test", "gauge", 1.0).
+			WithArgs("test", "gauge", 1.0, sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -391,11 +392,14 @@ func TestPostgresStorage_UpdateMetricsBatch(t *testing.T) {
 }
 
 func TestPostgresStorage_Close(t *testing.T) {
-	db, _, err := sqlmock.New()
+	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+
+	mock.ExpectClose()
 
 	storage := NewTestableStorage(db)
+
 	err = storage.Close()
 	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

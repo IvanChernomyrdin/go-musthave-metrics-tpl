@@ -1,3 +1,4 @@
+// Package db
 package db
 
 import (
@@ -24,7 +25,7 @@ func Init(databaseDSN string) error {
 		return fmt.Errorf("не удалось подключиться к БД: %v", err)
 	}
 
-	if err := DB.Ping(); err != nil {
+	if err = DB.Ping(); err != nil {
 		return fmt.Errorf("проверка подключения к БД не удалась: %v", err)
 	}
 
