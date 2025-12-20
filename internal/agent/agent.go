@@ -45,10 +45,9 @@ func (a *Agent) Start(ctx context.Context) error {
 	collectedMetrics := NewSafeMetrics()
 
 	// Канал для отправки метрик с буфером по rate limit
-	metricsCh := make(chan []model.Metrics, a.rateLimit*2)
+	metricsCh := make(chan *model.MetricsBatch, a.rateLimit*2)
 
 	g.Go(func() error {
-		defer pollTicker.Stop()
 		for {
 			select {
 			case <-gctx.Done():
@@ -79,13 +78,12 @@ func (a *Agent) Start(ctx context.Context) error {
 	// 3. Worker pool для отправки с rate limit
 	for i := 0; i < a.rateLimit; i++ {
 		g.Go(func() error {
-			return a.reportWorker(gctx, metricsCh)
+			return a.reportWorker(gctx, metricsCh, collectedMetrics)
 		})
 	}
 
 	// 4. Горутина-диспетчер, которая отправляет метрики в worker pool
 	g.Go(func() error {
-		defer reportTicker.Stop()
 		defer close(metricsCh)
 
 		for {
@@ -93,17 +91,22 @@ func (a *Agent) Start(ctx context.Context) error {
 			case <-gctx.Done():
 				return nil
 			case <-reportTicker.C:
-				if collectedMetrics.Len() > 0 {
-					metrics := collectedMetrics.GetAndClear()
-					select {
-					case metricsCh <- metrics:
-						castomLogger.Infof("Dispatched %d metrics to worker pool", len(metrics))
-					case <-gctx.Done():
-						return nil
-					default:
-						castomLogger.Infof("Worker pool busy, skipping batch of %d metrics", len(metrics))
-						collectedMetrics.Append(metrics)
-					}
+				batch := collectedMetrics.GetAndClear()
+				if batch == nil || len(batch.Item) == 0 {
+					collectedMetrics.PutBatch(batch)
+					continue
+				}
+				select {
+				case metricsCh <- batch:
+					castomLogger.Infof("Dispatched %d metrics to worker pool", len(batch.Item))
+				case <-gctx.Done():
+					collectedMetrics.Append(batch.Item)
+					collectedMetrics.PutBatch(batch)
+					return nil
+				default:
+					castomLogger.Infof("Worker pool busy, skipping batch of %d metrics", len(batch.Item))
+					collectedMetrics.Append(batch.Item)
+					collectedMetrics.PutBatch(batch)
 				}
 			}
 		}
@@ -113,67 +116,69 @@ func (a *Agent) Start(ctx context.Context) error {
 		return err
 	}
 
-	return a.finalShutdownSend(collectedMetrics.GetAndClear())
+	batch := collectedMetrics.GetAndClear()
+	err := a.finalShutdownSend(batch)
+	collectedMetrics.PutBatch(batch)
+	return err
 }
 
 // Worker для отправки метрик
-func (a *Agent) reportWorker(ctx context.Context, metricsCh <-chan []model.Metrics) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case metrics, ok := <-metricsCh:
-			if !ok {
-				return nil
-			}
-
-			if len(metrics) > 0 {
-				sendCtx, cancelSend := context.WithTimeout(ctx, 5*time.Second)
-				defer cancelSend()
-
-				if retrySender, ok := a.sender.(interface {
-					Retry(ctx context.Context, operation func() error) error
-				}); ok {
-					err := retrySender.Retry(sendCtx, func() error {
-						return a.sender.SendMetrics(sendCtx, metrics)
-					})
-					if err != nil {
-						castomLogger.Infof("Worker failed to send %d metrics after retries: %v", len(metrics), err)
-					} else {
-						castomLogger.Infof("Worker successfully sent %d metrics", len(metrics))
-					}
-				} else {
-					if err := a.sender.SendMetrics(sendCtx, metrics); err != nil {
-						castomLogger.Infof("Worker failed to send %d metrics: %v", len(metrics), err)
-					} else {
-						castomLogger.Infof("Worker successfully sent %d metrics", len(metrics))
-					}
-				}
-			}
+func (a *Agent) reportWorker(ctx context.Context, metricsCh <-chan *model.MetricsBatch, collectedMetrics *SafeMetrics) error {
+	for batch := range metricsCh { // <- ключевое
+		if batch == nil || len(batch.Item) == 0 {
+			collectedMetrics.PutBatch(batch)
+			continue
 		}
+
+		sendCtx, cancelSend := context.WithTimeout(ctx, 5*time.Second)
+		err := func() error {
+			defer cancelSend()
+
+			if retrySender, ok := a.sender.(interface {
+				Retry(ctx context.Context, operation func() error) error
+			}); ok {
+				return retrySender.Retry(sendCtx, func() error {
+					return a.sender.SendMetrics(sendCtx, batch.Item)
+				})
+			}
+			return a.sender.SendMetrics(sendCtx, batch.Item)
+		}()
+
+		if err != nil {
+			castomLogger.Infof("Worker failed to send %d metrics: %v", len(batch.Item), err)
+		} else {
+			castomLogger.Infof("Worker successfully sent %d metrics", len(batch.Item))
+		}
+
+		collectedMetrics.PutBatch(batch)
 	}
+	return nil
 }
 
 // Финальная отправка при shutdown
-func (a *Agent) finalShutdownSend(metrics []model.Metrics) error {
-	if len(metrics) > 0 {
-		castomLogger.Infof("Performing final send of %d metrics before shutdown", len(metrics))
-		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancelShutdown()
+func (a *Agent) finalShutdownSend(metrics *model.MetricsBatch) error {
+	if metrics == nil || len(metrics.Item) == 0 {
+		return nil
+	}
 
-		if retrySender, ok := a.sender.(interface {
-			Retry(ctx context.Context, operation func() error) error
-		}); ok {
-			err := retrySender.Retry(shutdownCtx, func() error {
-				return a.sender.SendMetrics(shutdownCtx, metrics)
-			})
-			if err != nil {
-				castomLogger.Infof("Final send failed: %v", err)
-			} else {
-				castomLogger.Infof("Final send completed successfully")
-			}
+	castomLogger.Infof("Performing final send of %d metrics before shutdown", len(metrics.Item))
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelShutdown()
+
+	if retrySender, ok := a.sender.(interface {
+		Retry(ctx context.Context, operation func() error) error
+	}); ok {
+		err := retrySender.Retry(shutdownCtx, func() error {
+			return a.sender.SendMetrics(shutdownCtx, metrics.Item)
+		})
+		if err != nil {
+			castomLogger.Infof("Final send failed: %v", err)
 		} else {
-			a.sender.SendMetrics(shutdownCtx, metrics)
+			castomLogger.Infof("Final send completed successfully")
+		}
+	} else {
+		if err := a.sender.SendMetrics(shutdownCtx, metrics.Item); err != nil {
+			castomLogger.Infof("Final send failed: %v", err)
 		}
 	}
 	return nil
