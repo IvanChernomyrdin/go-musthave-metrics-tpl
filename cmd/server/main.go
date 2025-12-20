@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -20,7 +21,23 @@ import (
 	service "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/service"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
+func defaultIfEmpty(s string) string {
+	if s == "" {
+		return "N/A"
+	}
+	return s
+}
+
 func main() {
+	fmt.Printf("Build version: %s\n", defaultIfEmpty(buildVersion))
+	fmt.Printf("Build date: %s\n", defaultIfEmpty(buildDate))
+	fmt.Printf("Build commit: %s\n", defaultIfEmpty(buildCommit))
 	cfg := config.Load()
 
 	customLogger := logger.NewHTTPLogger().Logger.Sugar()
