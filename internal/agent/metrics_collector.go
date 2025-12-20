@@ -13,6 +13,7 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
+// generate:reset
 type RuntimeMetricsCollector struct {
 	pollCount int64
 	mu        sync.Mutex

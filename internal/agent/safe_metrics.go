@@ -7,6 +7,7 @@ import (
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 )
 
+// generate:reset
 type SafeMetrics struct {
 	mu      sync.RWMutex
 	metrics []model.Metrics
