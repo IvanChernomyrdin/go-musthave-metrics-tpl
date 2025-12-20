@@ -135,7 +135,7 @@ func TestApplyEnv(t *testing.T) {
 		"DATABASE_DSN",
 		"KEY",
 	} {
-		_ = os.Unsetenv(key)
+		os.Unsetenv(key)
 	}
 	tests := []struct {
 		name        string

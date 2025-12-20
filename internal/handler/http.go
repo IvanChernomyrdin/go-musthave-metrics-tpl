@@ -115,7 +115,7 @@ func (h *Handler) processURLParams(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("OK"))
+	w.Write([]byte("OK"))
 }
 
 func (h *Handler) processMetric(ctx context.Context, metric model.Metrics) error {
@@ -205,7 +205,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	t := template.Must(template.New("idx").Parse(tpl))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = t.Execute(w, all)
+	t.Execute(w, all)
 }
 
 // GetValueJSON godoc

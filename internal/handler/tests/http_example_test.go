@@ -109,7 +109,7 @@ func ExampleHandler_UpdateMetric_jsonFormat() {
 
 	// Чтение ответа
 	var response map[string]string
-	_ = json.NewDecoder(resp.Body).Decode(&response)
+	json.NewDecoder(resp.Body).Decode(&response)
 
 	fmt.Printf("Status: %d\n", resp.StatusCode)
 	fmt.Printf("Response status: %s\n", response["status"])
@@ -127,7 +127,7 @@ func ExampleHandler_GetValue() {
 	h := handlertest.NewHandler(svc)
 
 	// Сначала добавляем метрику
-	_ = svc.UpdateGauge(context.Background(), "Alloc", 1234.56)
+	svc.UpdateGauge(context.Background(), "Alloc", 1234.56)
 
 	server := createTestServer(h)
 	defer server.Close()
@@ -158,7 +158,7 @@ func ExampleHandler_GetValueJSON() {
 	h := handlertest.NewHandler(svc)
 
 	// Добавляем тестовую метрику
-	_ = svc.UpdateGauge(context.Background(), "Alloc", 1234.56)
+	svc.UpdateGauge(context.Background(), "Alloc", 1234.56)
 
 	server := createTestServer(h)
 	defer server.Close()
@@ -185,7 +185,7 @@ func ExampleHandler_GetValueJSON() {
 
 	// Декодирование ответа
 	var metric model.Metrics
-	_ = json.NewDecoder(resp.Body).Decode(&metric)
+	json.NewDecoder(resp.Body).Decode(&metric)
 
 	fmt.Printf("Status: %d\n", resp.StatusCode)
 	fmt.Printf("Found metric: ID=%s, Type=%s, Value=%.2f\n",
@@ -235,7 +235,7 @@ func ExampleHandler_UpdateMetricsBatch() {
 	defer resp.Body.Close()
 
 	var response map[string]string
-	_ = json.NewDecoder(resp.Body).Decode(&response)
+	json.NewDecoder(resp.Body).Decode(&response)
 
 	fmt.Printf("Status: %d\n", resp.StatusCode)
 	fmt.Printf("Batch update status: %s\n", response["status"])
@@ -253,8 +253,8 @@ func ExampleHandler_GetAll() {
 	h := handlertest.NewHandler(svc)
 
 	// Добавляем тестовые метрики
-	_ = svc.UpdateGauge(context.Background(), "Alloc", 1234.56)
-	_ = svc.UpdateCounter(context.Background(), "PollCount", 42)
+	svc.UpdateGauge(context.Background(), "Alloc", 1234.56)
+	svc.UpdateCounter(context.Background(), "PollCount", 42)
 
 	server := createTestServer(h)
 	defer server.Close()

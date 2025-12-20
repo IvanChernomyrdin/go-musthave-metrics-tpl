@@ -173,7 +173,7 @@ func (a *Agent) finalShutdownSend(metrics []model.Metrics) error {
 				castomLogger.Infof("Final send completed successfully")
 			}
 		} else {
-			_ = a.sender.SendMetrics(shutdownCtx, metrics)
+			a.sender.SendMetrics(shutdownCtx, metrics)
 		}
 	}
 	return nil
