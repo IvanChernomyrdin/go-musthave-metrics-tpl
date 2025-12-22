@@ -170,10 +170,8 @@ func main() {
 		pi := byPkg[k]
 		if err := generateForPackage(pi); err != nil {
 			customLogger.Warn("ERROR: generate %s: %v\n", pi.PkgPath, err)
-			// fmt.Printf("ERROR: generate %s: %v\n", pi.PkgPath, err)
 		} else {
 			customLogger.Info("OK: generated %s\n", filepath.Join(pi.Dir, "reset.gen.go"))
-			// fmt.Printf("OK: generated %s\n", filepath.Join(pi.Dir, "reset.gen.go"))
 		}
 	}
 }
