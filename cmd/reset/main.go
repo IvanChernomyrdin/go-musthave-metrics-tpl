@@ -30,8 +30,11 @@ import (
 	"sort"
 	"strings"
 
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
 	"golang.org/x/tools/go/packages"
 )
+
+var customLogger = logger.NewHTTPLogger().Logger.Sugar()
 
 const trigger = "generate:reset"
 
@@ -68,7 +71,7 @@ func main() {
 
 	pkgs, err := packages.Load(cfg, "./...")
 	if err != nil {
-		panic(err)
+		customLogger.Fatalf("%v", err)
 	}
 
 	byPkg := map[string]*PkgInfo{}
@@ -76,7 +79,8 @@ func main() {
 	for _, pkg := range pkgs {
 		// Покажем ошибки загрузки пакетов (не обязательно падать)
 		for _, e := range pkg.Errors {
-			fmt.Printf("WARN: packages load error: %s\n", e)
+
+			customLogger.Warn("packages load error: %s\n", e)
 		}
 
 		// пропускаем сам генератор
@@ -113,14 +117,14 @@ func main() {
 
 					named, st, ok := namedStructFromTypeSpec(pkg, ts)
 					if !ok {
-						fmt.Printf("WARN: cannot resolve types for %s.%s\n", pkg.PkgPath, ts.Name.Name)
+						customLogger.Warn("cannot resolve types for %s.%s\n", pkg.PkgPath, ts.Name.Name)
 						continue
 					}
 
 					// Если у структуры уже есть Reset() написанный руками (не в reset.gen.go) — пропустим генерацию,
 					// иначе будет ошибка "method redeclared".
 					if manualReset[ts.Name.Name] {
-						fmt.Printf("WARN: %s.%s has manual Reset(); skip generation for this struct\n", pkg.PkgPath, ts.Name.Name)
+						customLogger.Warnf("%s.%s has manual Reset(); skip generation for this struct\n", pkg.PkgPath, ts.Name.Name)
 						continue
 					}
 
@@ -147,7 +151,7 @@ func main() {
 
 					pi.Structs = append(pi.Structs, si)
 
-					fmt.Printf("FOUND: %s (%s) struct %s\n", pkg.PkgPath, dir, ts.Name.Name)
+					customLogger.Infof("FOUND: %s (%s) struct %s\n", pkg.PkgPath, dir, ts.Name.Name)
 				}
 
 				return false
@@ -165,9 +169,11 @@ func main() {
 	for _, k := range pkgKeys {
 		pi := byPkg[k]
 		if err := generateForPackage(pi); err != nil {
-			fmt.Printf("ERROR: generate %s: %v\n", pi.PkgPath, err)
+			customLogger.Warn("ERROR: generate %s: %v\n", pi.PkgPath, err)
+			// fmt.Printf("ERROR: generate %s: %v\n", pi.PkgPath, err)
 		} else {
-			fmt.Printf("OK: generated %s\n", filepath.Join(pi.Dir, "reset.gen.go"))
+			customLogger.Info("OK: generated %s\n", filepath.Join(pi.Dir, "reset.gen.go"))
+			// fmt.Printf("OK: generated %s\n", filepath.Join(pi.Dir, "reset.gen.go"))
 		}
 	}
 }

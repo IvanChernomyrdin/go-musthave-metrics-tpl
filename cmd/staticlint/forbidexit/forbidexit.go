@@ -3,6 +3,7 @@ package forbidexit
 
 import (
 	"go/ast"
+	"go/types"
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
@@ -57,15 +58,14 @@ func run(pass *analysis.Pass) (interface{}, error) {
 					return true
 				}
 
-				pkgIdent, ok := sel.X.(*ast.Ident)
-				if !ok {
-					return true
-				}
-
-				if pkgIdent.Name == "os" && sel.Sel.Name == "Exit" {
-					pass.Reportf(call.Pos(),
-						"запрещён прямой вызов os.Exit в main.main; верни ошибку или используй логическое завершение",
-					)
+				// Используем TypesInfo.Uses
+				if obj, ok := pass.TypesInfo.Uses[sel.Sel]; ok {
+					// Проверяем os.Exit
+					if fn, ok := obj.(*types.Func); ok && fn.Pkg() != nil && fn.Pkg().Path() == "os" && fn.Name() == "Exit" {
+						pass.Reportf(call.Pos(),
+							"запрещён прямой вызов os.Exit в main.main; верни ошибку или используй логическое завершение",
+						)
+					}
 				}
 
 				return true
