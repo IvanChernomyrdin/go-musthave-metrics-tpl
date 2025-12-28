@@ -92,7 +92,7 @@ func main() {
 	if cfg.AuditURL != "" {
 		auditReceivers = append(auditReceivers, &middleware.URLAuditReceiver{URL: cfg.AuditURL})
 	}
-	r := httpserver.NewRouter(h, cfg.HashKey, auditReceivers)
+	r := httpserver.NewRouter(h, cfg.HashKey, auditReceivers, cfg.CryptoKey)
 
 	var ticker *time.Ticker
 

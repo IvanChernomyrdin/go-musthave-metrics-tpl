@@ -11,11 +11,15 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
-func NewRouter(h *Handler, HashKey string, auditReceivers []middleware.AuditReceiver) http.Handler {
+func NewRouter(h *Handler, HashKey string, auditReceivers []middleware.AuditReceiver, privateKeyPath string) http.Handler {
 	r := chi.NewRouter()
 
 	// декомпрессия данных
 	r.Use(middleware.GzipDecompression)
+	// расшифровываем боди если был передан адрес на приватный ключ и если есть заголовок
+	if privateKeyPath != "" {
+		r.Use(middleware.DecryptMiddleware(privateKeyPath))
+	}
 	// лоигрование
 	r.Use(middleware.LoggerMiddleware())
 	// компресия ответа

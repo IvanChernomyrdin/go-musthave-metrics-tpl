@@ -23,6 +23,7 @@ type Config struct {
 	ReadTimeout     int    `env:"READ_TIMEOUT"`
 	WriteTimeout    int    `env:"WRITE_TIMEOUT"`
 	IdleTimeout     int    `env:"IDLE_TIMEOUT"`
+	CryptoKey       string `env:"CRYPTO_KEY"`
 }
 
 func Load() *Config {
@@ -42,6 +43,7 @@ func Load() *Config {
 	flag.StringVar(&cfg.HashKey, "k", "", "ключ подписики по алгоритму sha256")
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "audit path logs file")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "audit url push logs")
+	flag.StringVar(&cfg.CryptoKey, "s", "", "the path to private key")
 	flag.Parse()
 
 	if err := cleanenv.ReadEnv(cfg); err != nil {

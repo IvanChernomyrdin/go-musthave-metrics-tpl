@@ -147,7 +147,7 @@ func TestNewConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := agent.NewConfig(tt.addrAgent, tt.pollInterval, tt.reportInterval, tt.hash, tt.rateLimit)
+			config := agent.NewConfig(tt.addrAgent, tt.pollInterval, tt.reportInterval, tt.hash, tt.rateLimit, "")
 
 			require.NotNil(t, config)
 			assert.Equal(t, tt.expectedURL, config.GetServerURL())

@@ -33,17 +33,20 @@ func main() {
 	go func() {
 		http.ListenAndServe("localhost:6060", nil)
 	}()
-	addrAgent, pollDuration, reportDuration, hash, rateLimit := agent.EnvConfigRes()
-	config := agent.NewConfig(addrAgent, pollDuration, reportDuration, hash, rateLimit)
+	addrAgent, pollDuration, reportDuration, hash, rateLimit, cryptokey := agent.EnvConfigRes()
+	config := agent.NewConfig(addrAgent, pollDuration, reportDuration, hash, rateLimit, cryptokey)
 
 	collector := agent.NewRuntimeMetricsCollector()
-	sender := agent.NewHTTPSender(config.GetServerURL(), config.GetHash())
+	sender, err := agent.NewHTTPSender(config.GetServerURL(), config.GetHash(), config.CryptoKey)
+	if err != nil {
+		logger.NewHTTPLogger().Logger.Sugar().Fatalf("failed to create NewHTTPSender: %v", err)
+	}
 	metricsAgent := agent.NewAgent(collector, sender, config)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	if err := metricsAgent.Start(ctx); err != nil {
-		logger.NewHTTPLogger().Logger.Sugar().Fatalf("Failed to start metrics agent: %v", err)
+		logger.NewHTTPLogger().Logger.Sugar().Fatalf("failed to start metrics agent: %v", err)
 	}
 }

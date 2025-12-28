@@ -50,4 +50,6 @@ type ConfigProvider interface {
 	GetHash() string
 	// возвращает лимит запросов в секунду для ограничения нагрузки.
 	GetRateLimit() int
+	// возвращает путь до файла с публичным ключом
+	GetCryptoKey() string
 }

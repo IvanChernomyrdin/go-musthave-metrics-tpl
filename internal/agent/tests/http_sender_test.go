@@ -26,12 +26,12 @@ func setupTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 
 func TestNewHTTPSender(t *testing.T) {
 	t.Run("create with valid URL", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://localhost:8080", "")
+		sender, _ := agent.NewHTTPSender("http://localhost:8080", "", "")
 		require.NotNil(t, sender)
 	})
 
 	t.Run("URL normalization", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://example.com/", "")
+		sender, _ := agent.NewHTTPSender("http://example.com/", "", "")
 		require.NotNil(t, sender)
 	})
 }
@@ -47,7 +47,7 @@ func TestHTTPSender_SendMetrics(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "")
+		sender, _ := agent.NewHTTPSender(server.URL, "", "")
 		metrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
@@ -69,7 +69,7 @@ func TestHTTPSender_SendMetrics(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "")
+		sender, _ := agent.NewHTTPSender(server.URL, "", "")
 		metrics := []model.Metrics{
 			{ID: "", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "valid", MType: "gauge", Value: float64Ptr(2.34)},
@@ -91,7 +91,7 @@ func TestHTTPSender_SendMetrics(t *testing.T) {
 			}
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "")
+		sender, _ := agent.NewHTTPSender(server.URL, "", "")
 		metrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
@@ -105,7 +105,7 @@ func TestHTTPSender_SendMetrics(t *testing.T) {
 
 func TestHTTPSender_Retry(t *testing.T) {
 	t.Run("success on first attempt", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://localhost:8080", "")
+		sender, _ := agent.NewHTTPSender("http://localhost:8080", "", "")
 		attempts := 0
 
 		err := sender.Retry(context.Background(), func() error {
@@ -118,7 +118,7 @@ func TestHTTPSender_Retry(t *testing.T) {
 	})
 
 	t.Run("success after retries", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://localhost:8080", "")
+		sender, _ := agent.NewHTTPSender("http://localhost:8080", "", "")
 		attempts := 0
 
 		err := sender.Retry(context.Background(), func() error {
@@ -134,7 +134,7 @@ func TestHTTPSender_Retry(t *testing.T) {
 	})
 
 	t.Run("non-retriable error fails immediately", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://localhost:8080", "")
+		sender, _ := agent.NewHTTPSender("http://localhost:8080", "", "")
 		attempts := 0
 		expectedErr := errors.New("permanent error")
 
@@ -149,7 +149,7 @@ func TestHTTPSender_Retry(t *testing.T) {
 	})
 
 	t.Run("context cancellation", func(t *testing.T) {
-		sender := agent.NewHTTPSender("http://localhost:8080", "")
+		sender, _ := agent.NewHTTPSender("http://localhost:8080", "", "")
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
@@ -223,7 +223,7 @@ func TestMetricValidation(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "")
+		sender, _ := agent.NewHTTPSender(server.URL, "", "")
 		validMetrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
@@ -241,7 +241,7 @@ func TestMetricValidation(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "")
+		sender, _ := agent.NewHTTPSender(server.URL, "", "")
 		mixedMetrics := []model.Metrics{
 			{ID: "", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "valid1", MType: "gauge", Value: float64Ptr(2.34)},
@@ -290,7 +290,7 @@ func TestHTTPSender_Concurrent(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "")
+		sender, _ := agent.NewHTTPSender(server.URL, "", "")
 		metrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
@@ -328,7 +328,7 @@ func TestHTTPSender_ContextCancellation(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "")
+		sender, _ := agent.NewHTTPSender(server.URL, "", "")
 		metrics := []model.Metrics{
 			{ID: "test", MType: "gauge", Value: float64Ptr(1.23)},
 		}
@@ -349,7 +349,7 @@ func TestHTTPSender_HashSHA256Header(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "test-key")
+		sender, _ := agent.NewHTTPSender(server.URL, "test-key", "")
 		metrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 		}
@@ -367,7 +367,7 @@ func TestHTTPSender_HashSHA256Header(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "") // empty key
+		sender, _ := agent.NewHTTPSender(server.URL, "", "") // empty key
 		metrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 		}
@@ -389,7 +389,7 @@ func TestHTTPSender_HashSHA256Header(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "json-key")
+		sender, _ := agent.NewHTTPSender(server.URL, "json-key", "")
 
 		// Пробуем отправить одну метрику
 		metrics := []model.Metrics{
@@ -423,7 +423,7 @@ func TestHTTPSender_HashSHA256Header(t *testing.T) {
 			}
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "text-key")
+		sender, _ := agent.NewHTTPSender(server.URL, "text-key", "")
 
 		metrics := []model.Metrics{
 			{ID: "test", MType: "gauge", Value: float64Ptr(1.23)},
@@ -451,7 +451,7 @@ func TestHTTPSender_HashSHA256Header(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "batch-key")
+		sender, _ := agent.NewHTTPSender(server.URL, "batch-key", "")
 		metrics := []model.Metrics{
 			{ID: "test1", MType: "gauge", Value: float64Ptr(1.23)},
 			{ID: "test2", MType: "counter", Delta: int64Ptr(42)},
@@ -473,7 +473,7 @@ func TestHTTPSender_HashSHA256Header(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		sender := agent.NewHTTPSender(server.URL, "consistent-key")
+		sender, _ := agent.NewHTTPSender(server.URL, "consistent-key", "")
 		metrics := []model.Metrics{
 			{ID: "test", MType: "gauge", Value: float64Ptr(1.23)},
 		}
@@ -508,12 +508,12 @@ func TestHTTPSender_HashSHA256Header(t *testing.T) {
 		}
 
 		// Первая отправка 1 ключик
-		sender1 := agent.NewHTTPSender(server.URL, "key1")
+		sender1, _ := agent.NewHTTPSender(server.URL, "key1", "")
 		err := sender1.SendMetrics(context.Background(), metrics)
 		assert.NoError(t, err)
 
 		// Вторая отправка с ключом 2 (те же данные, другой ключ)
-		sender2 := agent.NewHTTPSender(server.URL, "key2")
+		sender2, _ := agent.NewHTTPSender(server.URL, "key2", "")
 		err = sender2.SendMetrics(context.Background(), metrics)
 		assert.NoError(t, err)
 

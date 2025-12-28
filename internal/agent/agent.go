@@ -20,6 +20,7 @@ type Agent struct {
 	sender    model.MetricsSender
 	config    model.ConfigProvider
 	rateLimit int
+	cryptokey string
 }
 
 func NewAgent(collector model.MetricsCollector, sender model.MetricsSender, config model.ConfigProvider) *Agent {

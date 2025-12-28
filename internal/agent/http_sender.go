@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/hmac"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -116,11 +117,22 @@ type HTTPSender struct {
 	retryConfig     RetryConfig
 	errorClassifier *HTTPErrorClassifier
 	HashKey         string
+	pubKey          *rsa.PublicKey
 }
 
-func NewHTTPSender(serverURL string, HashKey string) *HTTPSender {
+func NewHTTPSender(serverURL string, HashKey string, publicKeyPath string) (*HTTPSender, error) {
 	client := resty.New()
 	client.SetTimeout(10 * time.Second)
+
+	var pubKey *rsa.PublicKey
+	var err error
+
+	if publicKeyPath != "" {
+		pubKey, err = LoadPublicKey(publicKeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load public key: %w", err)
+		}
+	}
 
 	return &HTTPSender{
 		client:          client,
@@ -129,7 +141,8 @@ func NewHTTPSender(serverURL string, HashKey string) *HTTPSender {
 		retryConfig:     DefaultRetryConfig(),
 		errorClassifier: NewHTTPErrorClassifier(),
 		HashKey:         HashKey,
-	}
+		pubKey:          pubKey,
+	}, nil
 }
 
 func (s *HTTPSender) calculateHash256(b []byte) string {
@@ -282,11 +295,26 @@ func (s *HTTPSender) sendJSON(ctx context.Context, metric []byte) error {
 	base := strings.TrimRight(s.url, "/")
 	fullURL := base + "/update/"
 
+	// пытаем зашифровать
+	dataToSend := metric
+	if s.pubKey != nil {
+		var err error
+		dataToSend, err = EncryptWithRSA(s.pubKey, dataToSend)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt metrics: %w", err)
+		}
+	}
+
 	req := s.client.R().
 		SetContext(ctx).
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
-		SetBody(metric)
+		SetBody(dataToSend)
+
+	// добавляем заголовок при шифровании
+	if s.pubKey != nil {
+		req.SetHeader("X-Encrypted", "rsa")
+	}
 
 	if hash := s.calculateHash256(metric); hash != "" {
 		req.SetHeader("HashSHA256", hash)
@@ -381,11 +409,33 @@ func (s *HTTPSender) sendBatch(ctx context.Context, metrics []model.Metrics) err
 	base := strings.TrimRight(s.url, "/")
 	fullURL := base + "/updates/"
 
+	dataToSend := compressionBuf.Bytes()
+
+	if s.pubKey != nil {
+		var err error
+		if len(dataToSend) < 180 { // если большой батч то делаем гибридный метод
+			dataToSend, err = EncryptWithRSA(s.pubKey, dataToSend)
+		} else {
+			dataToSend, err = EncryptHybridAESRSA(s.pubKey, dataToSend)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to encrypt metrics: %w", err)
+		}
+	}
+
 	req := s.client.R().
 		SetContext(ctx).
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
-		SetBody(compressionBuf.Bytes())
+		SetBody(dataToSend)
+
+	if s.pubKey != nil {
+		if len(dataToSend) < 180 {
+			req.SetHeader("X-Encrypted", "rsa")
+		} else {
+			req.SetHeader("X-Encrypted", "hybrid")
+		}
+	}
 
 	if hash := s.calculateHash256(compressionBuf.Bytes()); hash != "" {
 		req.SetHeader("HashSHA256", hash)
