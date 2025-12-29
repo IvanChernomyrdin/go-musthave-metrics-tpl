@@ -39,8 +39,9 @@ func main() {
 	fmt.Printf("Build date: %s\n", defaultIfEmpty(buildDate))
 	fmt.Printf("Build commit: %s\n", defaultIfEmpty(buildCommit))
 	cfg := config.Load()
-
 	customLogger := logger.NewHTTPLogger().Logger.Sugar()
+	appCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
+	defer stop()
 
 	go func() {
 		http.ListenAndServe("localhost:6061", nil)
@@ -49,7 +50,6 @@ func main() {
 	var repo memory.Storage
 	var usePostgreSQL bool
 
-	// Пытаемся использовать PostgreSQL если указан DSN
 	if cfg.DatabaseDSN != "" {
 		if err := db.Init(cfg.DatabaseDSN); err != nil {
 			customLogger.Infof("PostgreSQL недоступна: %v", err)
@@ -65,6 +65,7 @@ func main() {
 		usePostgreSQL = false
 		customLogger.Info("Используется memory хранилище")
 	}
+
 	defer func() {
 		if err := repo.Close(); err != nil {
 			customLogger.Infof("Ошибка при закрытии хранилища: %v", err)
@@ -73,15 +74,13 @@ func main() {
 
 	svc := service.NewMetricsService(repo)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Загрузка из файла только если НЕ используется PostgreSQL
 	if !usePostgreSQL && cfg.Restore && cfg.FileStoragePath != "" {
+		loadCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		customLogger.Infof("Загрузка метрик из файла: %s", cfg.FileStoragePath)
-		if err := svc.LoadFromFile(ctx, cfg.FileStoragePath); err != nil {
+		if err := svc.LoadFromFile(loadCtx, cfg.FileStoragePath); err != nil {
 			customLogger.Infof("Ошибка загрузки метрик: %v", err)
 		}
+		cancel()
 	}
 
 	h := httpserver.NewHandler(svc)
@@ -95,12 +94,10 @@ func main() {
 	r := httpserver.NewRouter(h, cfg.HashKey, auditReceivers, cfg.CryptoKey)
 
 	var ticker *time.Ticker
-
-	// Настройка сохранения в файл только если НЕ используется PostgreSQL
 	if !usePostgreSQL && cfg.FileStoragePath != "" {
 		if cfg.StoreInterval > 0 {
-			DurationStoreInterval := time.Duration(cfg.StoreInterval) * time.Second
-			ticker = svc.StartPeriodicSaving(ctx, cfg.FileStoragePath, DurationStoreInterval)
+			d := time.Duration(cfg.StoreInterval) * time.Second
+			ticker = svc.StartPeriodicSaving(appCtx, cfg.FileStoragePath, d)
 			customLogger.Infof("Периодическое сохранение каждые %d секунд", cfg.StoreInterval)
 		} else {
 			r = svc.SaveOnUpdateMiddleware(cfg.FileStoragePath)(r)
@@ -116,34 +113,43 @@ func main() {
 		IdleTimeout:  time.Duration(cfg.IdleTimeout) * time.Second,
 	}
 
-	// Graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
+	errCh := make(chan error, 1)
 	go func() {
 		log.Printf("Сервер запущен на %s", cfg.Address)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			customLogger.Fatalf("Ошибка сервера: %v", err)
+			errCh <- err
+			return
 		}
+		errCh <- nil
 	}()
 
-	<-quit
-	customLogger.Info("Завершение работы сервера...")
+	select {
+	case <-appCtx.Done():
+		customLogger.Info("Получен сигнал завершения, останавливаем сервер...")
+	case err := <-errCh:
+		if err != nil {
+			customLogger.Fatalf("Ошибка сервера: %v", err)
+		}
+		customLogger.Info("Сервер завершился")
+		return
+	}
 
 	if ticker != nil {
 		ticker.Stop()
 	}
 
-	// Сохранение в файл только если НЕ используется PostgreSQL
-	if !usePostgreSQL && cfg.FileStoragePath != "" {
-		customLogger.Info("Сохранение метрик...")
-		if err := svc.SaveToFile(ctx, cfg.FileStoragePath); err != nil {
-			customLogger.Infof("Ошибка сохранения при завершении: %v", err)
-		}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		customLogger.Fatalf("Принудительное завершение: %v", err)
 	}
 
-	if err := server.Shutdown(ctx); err != nil {
-		customLogger.Fatalf("Принудительное завершение: %v", err)
+	if !usePostgreSQL && cfg.FileStoragePath != "" {
+		customLogger.Info("Сохранение метрик...")
+		if err := svc.SaveToFile(shutdownCtx, cfg.FileStoragePath); err != nil {
+			customLogger.Infof("Ошибка сохранения при завершении: %v", err)
+		}
 	}
 
 	customLogger.Info("Сервер остановлен")

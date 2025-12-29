@@ -43,7 +43,7 @@ func main() {
 	}
 	metricsAgent := agent.NewAgent(collector, sender, config)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
 	if err := metricsAgent.Start(ctx); err != nil {
