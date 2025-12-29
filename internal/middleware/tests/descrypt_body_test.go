@@ -128,8 +128,12 @@ func TestDecryptMiddleware(t *testing.T) {
 			if !handlerCalled {
 				t.Errorf("handler was not called")
 			}
-			if w.Result().StatusCode != http.StatusOK {
-				t.Errorf("unexpected status code %d", w.Result().StatusCode)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("unexpected status code %d", resp.StatusCode)
 			}
 		})
 	}
