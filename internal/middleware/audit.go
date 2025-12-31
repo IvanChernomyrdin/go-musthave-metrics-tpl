@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
-	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
+	runtime "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 )
 
 type AuditEvent struct {
@@ -86,7 +87,7 @@ func AuditMiddleware(auditReceivers []AuditReceiver) func(next http.Handler) htt
 
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				runtime.NewHTTPLogger().Logger.Sugar().Warnf("Error reading request body: %v", err)
+				logger.NewHTTPLogger().Logger.Sugar().Warnf("Error reading request body: %v", err)
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -100,7 +101,7 @@ func AuditMiddleware(auditReceivers []AuditReceiver) func(next http.Handler) htt
 				return
 			}
 
-			runtime.NewHTTPLogger().Logger.Sugar().Infof("Extracted metrics: %v", metrics)
+			logger.NewHTTPLogger().Logger.Sugar().Infof("Extracted metrics: %v", metrics)
 
 			var auditMetrics []string
 			for _, metric := range metrics {

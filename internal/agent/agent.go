@@ -9,7 +9,7 @@ import (
 	"time"
 
 	model "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
-	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 	"golang.org/x/sync/errgroup"
 )
 

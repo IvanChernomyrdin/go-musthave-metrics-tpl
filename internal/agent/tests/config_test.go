@@ -187,7 +187,7 @@ func TestConfigGetters(t *testing.T) {
 		ServerURL:      "http://test:8080",
 		PollInterval:   3 * time.Second,
 		ReportInterval: 12 * time.Second,
-		Hash:           "test-hash",
+		Key:            "test-hash",
 		RateLimit:      5,
 		CryptoKey:      "/test/key.pem",
 	}

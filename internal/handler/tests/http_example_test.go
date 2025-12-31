@@ -15,8 +15,8 @@ import (
 	handlertest "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/handler"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/memory"
-	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/service"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 	"github.com/go-chi/chi/v5"
 )
 

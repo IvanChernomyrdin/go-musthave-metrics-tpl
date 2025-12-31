@@ -11,7 +11,7 @@ import (
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config/db"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 	errPostgres "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/postgres/errors"
-	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 	sq "github.com/Masterminds/squirrel"
 )
 

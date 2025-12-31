@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"os"
 
-	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 )
 
 // загружает приватный ключ RSA

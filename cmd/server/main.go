@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -17,8 +16,8 @@ import (
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/middleware"
 	memory "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/memory"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/postgres"
-	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
 	service "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/service"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 )
 
 var (
@@ -115,7 +114,7 @@ func main() {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("Сервер запущен на %s", cfg.Address)
+		customLogger.Infof("Сервер запущен на %s", cfg.Address)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 			return
@@ -148,7 +147,7 @@ func main() {
 	if !usePostgreSQL && cfg.FileStoragePath != "" {
 		customLogger.Info("Сохранение метрик...")
 		if err := svc.SaveToFile(shutdownCtx, cfg.FileStoragePath); err != nil {
-			customLogger.Infof("Ошибка сохранения при завершении: %v", err)
+			customLogger.Errorf("Ошибка сохранения при завершении: %v", err)
 		}
 	}
 

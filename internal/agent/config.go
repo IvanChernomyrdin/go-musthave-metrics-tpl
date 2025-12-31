@@ -12,14 +12,14 @@ import (
 	"strings"
 	"time"
 
-	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 )
 
 type Config struct {
 	ServerURL      string        `json:"address" env:"ADDRESS"`
 	PollInterval   time.Duration `json:"poll_interval" env:"POLL_INTERVAL"`
 	ReportInterval time.Duration `json:"report_interval" env:"REPORT_INTERVAL"`
-	Hash           string        `json:"key" env:"KEY"`
+	Key            string        `json:"key" env:"KEY"`
 	RateLimit      int           `json:"rate_limit" env:"RATE_LIMIT"`
 	CryptoKey      string        `json:"crypto_key" env:"CRYPTO_KEY"`
 	ConfigFile     string        `json:"-" env:"CONFIG"`
@@ -73,7 +73,7 @@ func LoadConfig() (*Config, error) {
 		ServerURL:      "localhost:8080",
 		PollInterval:   2 * time.Second,
 		ReportInterval: 10 * time.Second,
-		Hash:           "",
+		Key:            "",
 		RateLimit:      3,
 		CryptoKey:      "",
 		ConfigFile:     "",
@@ -89,7 +89,7 @@ func LoadConfig() (*Config, error) {
 	addr := fs.String("a", cfg.ServerURL, "http-agent address")
 	poll := fs.Duration("p", cfg.PollInterval, "poll interval (e.g. 2s)")
 	report := fs.Duration("r", cfg.ReportInterval, "report interval (e.g. 10s)")
-	key := fs.String("k", cfg.Hash, "sha256 key")
+	key := fs.String("k", cfg.Key, "sha256 key")
 	limit := fs.Int("l", cfg.RateLimit, "rate limit")
 	crypto := fs.String("crypto-key", cfg.CryptoKey, "path to public key")
 	_ = fs.String("s", cfg.CryptoKey, "alias for -crypto-key (deprecated)") // чтобы не ломать твой старый -s
@@ -123,7 +123,7 @@ func LoadConfig() (*Config, error) {
 		case "r":
 			cfg.ReportInterval = *report
 		case "k":
-			cfg.Hash = *key
+			cfg.Key = *key
 		case "l":
 			cfg.RateLimit = *limit
 		case "crypto-key":
@@ -162,7 +162,7 @@ func EnvConfigRes() (string, time.Duration, time.Duration, string, int, string) 
 		addr = strings.TrimPrefix(addr, "https://")
 	}
 
-	return addr, cfg.PollInterval, cfg.ReportInterval, cfg.Hash, cfg.RateLimit, cfg.CryptoKey
+	return addr, cfg.PollInterval, cfg.ReportInterval, cfg.Key, cfg.RateLimit, cfg.CryptoKey
 }
 
 func NewConfig(addrAgent string, pollInterval time.Duration, reportInterval time.Duration, hash string, rateLimit int, cryptokey string) *Config {
@@ -170,7 +170,7 @@ func NewConfig(addrAgent string, pollInterval time.Duration, reportInterval time
 		ServerURL:      ensureURLScheme(addrAgent),
 		PollInterval:   pollInterval,
 		ReportInterval: reportInterval,
-		Hash:           hash,
+		Key:            hash,
 		RateLimit:      rateLimit,
 		CryptoKey:      cryptokey,
 	}
@@ -179,7 +179,7 @@ func NewConfig(addrAgent string, pollInterval time.Duration, reportInterval time
 func (c *Config) GetServerURL() string             { return c.ServerURL }
 func (c *Config) GetPollInterval() time.Duration   { return c.PollInterval }
 func (c *Config) GetReportInterval() time.Duration { return c.ReportInterval }
-func (c *Config) GetHash() string                  { return c.Hash }
+func (c *Config) GetHash() string                  { return c.Key }
 func (c *Config) GetRateLimit() int                { return c.RateLimit }
 func (c *Config) GetCryptoKey() string             { return c.CryptoKey }
 
@@ -235,7 +235,7 @@ func applyEnv(cfg *Config) {
 		}
 	}
 	if v, ok := os.LookupEnv("KEY"); ok {
-		cfg.Hash = v
+		cfg.Key = v
 	}
 	if v, ok := os.LookupEnv("RATE_LIMIT"); ok && v != "" {
 		if n, err := strconv.Atoi(v); err == nil {

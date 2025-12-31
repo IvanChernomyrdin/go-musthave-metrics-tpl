@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
@@ -59,9 +59,6 @@ func Load() *Config {
 		StoreInterval:   300,
 		FileStoragePath: defaultFileStoragePath,
 		Restore:         true,
-		DatabaseDSN:     "",
-		HashKey:         "",
-		CryptoKey:       "",
 		ReadTimeout:     10,
 		WriteTimeout:    10,
 		IdleTimeout:     10,

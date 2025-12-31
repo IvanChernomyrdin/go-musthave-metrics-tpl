@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 )
 
 type ResponseWriter struct {

@@ -10,7 +10,7 @@ import (
 	"syscall"
 
 	agent "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/agent"
-	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/runtime"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 )
 
 var (
