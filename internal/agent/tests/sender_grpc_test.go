@@ -38,9 +38,7 @@ func setupBufConnServer(t *testing.T, srv pb.MetricsServer) (*grpc.ClientConn, f
 	pb.RegisterMetricsServer(server, srv)
 
 	go func() {
-		if err := server.Serve(lis); err != nil {
-			// Serve завершится при Stop
-		}
+		_ = server.Serve(lis)
 	}()
 
 	client, err := grpc.NewClient(
