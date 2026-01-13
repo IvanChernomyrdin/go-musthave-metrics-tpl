@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	agent "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/agent"
+	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 )
 
@@ -30,16 +31,29 @@ func main() {
 	fmt.Printf("Build version: %s\n", defaultIfEmpty(buildVersion))
 	fmt.Printf("Build date: %s\n", defaultIfEmpty(buildDate))
 	fmt.Printf("Build commit: %s\n", defaultIfEmpty(buildCommit))
+	customLoger := logger.NewHTTPLogger().Logger.Sugar()
 	go func() {
 		http.ListenAndServe("localhost:6060", nil)
 	}()
-	addrAgent, pollDuration, reportDuration, hash, rateLimit, cryptokey := agent.EnvConfigRes()
-	config := agent.NewConfig(addrAgent, pollDuration, reportDuration, hash, rateLimit, cryptokey)
+	config := agent.GetConfig()
 
 	collector := agent.NewRuntimeMetricsCollector()
-	sender, err := agent.NewHTTPSender(config.GetServerURL(), config.GetHash(), config.CryptoKey)
+
+	var sender model.MetricsSender
+	var err error
+
+	if config.GetGRPCAddr() != "" {
+		sender, err = agent.NewGRPCSender(config.GetGRPCAddr())
+	} else {
+		sender, err = agent.NewHTTPSender(
+			config.GetServerURL(),
+			config.GetHash(),
+			config.GetCryptoKey(),
+		)
+	}
+
 	if err != nil {
-		logger.NewHTTPLogger().Logger.Sugar().Fatalf("failed to create NewHTTPSender: %v", err)
+		customLoger.Fatalf("failed to create sender: %v", err)
 	}
 	metricsAgent := agent.NewAgent(collector, sender, config)
 
@@ -47,6 +61,6 @@ func main() {
 	defer stop()
 
 	if err := metricsAgent.Start(ctx); err != nil {
-		logger.NewHTTPLogger().Logger.Sugar().Fatalf("failed to start metrics agent: %v", err)
+		customLoger.Fatalf("failed to start metrics agent: %v", err)
 	}
 }

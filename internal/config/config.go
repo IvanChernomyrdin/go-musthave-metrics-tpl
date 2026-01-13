@@ -14,6 +14,7 @@ import (
 
 type Config struct {
 	Address         string `env:"ADDRESS"`
+	GRPCAddress     string `env:"GRPC_ADDRESS"`
 	StoreInterval   int    `env:"STORE_INTERVAL"` // секунды
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	Restore         bool   `env:"RESTORE"`
@@ -82,6 +83,7 @@ func Load() *Config {
 	auditURL := fs.String("audit-url", cfg.AuditURL, "audit url push logs")
 	cryptoKey := fs.String("crypto-key", cfg.CryptoKey, "the path to private key")
 	trustedSubnet := fs.String("t", cfg.TrustedSubnet, "trusted subnet CIDR")
+	grpcAddr := fs.String("grpc", "", "gRPC server address")
 
 	_ = fs.Parse(os.Args[1:])
 
@@ -122,6 +124,8 @@ func Load() *Config {
 			cfg.CryptoKey = *cryptoKey
 		case "t":
 			cfg.TrustedSubnet = *trustedSubnet
+		case "grpc":
+			cfg.GRPCAddress = *grpcAddr
 		}
 	})
 
@@ -151,6 +155,7 @@ func loadFromJSON(filename string, cfg *Config) {
 		DatabaseDSN   *string      `json:"database_dsn"`
 		CryptoKey     *string      `json:"crypto_key"`
 		TrustedSubnet *string      `json:"trusted_subnet"`
+		GRPCAddress   *string      `json:"grpc_address"`
 	}
 
 	if err := json.Unmarshal(data, &jc); err != nil {
@@ -179,6 +184,10 @@ func loadFromJSON(filename string, cfg *Config) {
 	if jc.TrustedSubnet != nil {
 		cfg.TrustedSubnet = *jc.TrustedSubnet
 	}
+	if jc.GRPCAddress != nil {
+		cfg.GRPCAddress = *jc.GRPCAddress
+	}
+
 }
 
 func (cfg *Config) GetStoreIntervalDuration() time.Duration {

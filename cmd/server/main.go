@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	config "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config"
 	db "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/config/db"
+	grpcserver "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/grpc"
 	httpserver "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/handler"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/middleware"
 	memory "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/repository/memory"
@@ -72,6 +74,34 @@ func main() {
 	}()
 
 	svc := service.NewMetricsService(repo)
+
+	var grpcSrv *grpcserver.Server
+	if cfg.GRPCAddress != "" {
+		grpcHandler := grpcserver.NewMetricsHandler(svc)
+
+		// парсим trusted subnet в *net.IPNet
+		var subnet *net.IPNet
+		if cfg.TrustedSubnet != "" {
+			_, parsed, err := net.ParseCIDR(cfg.TrustedSubnet)
+			if err != nil {
+				customLogger.Fatalf("invalid trusted subnet: %v", err)
+			}
+			subnet = parsed
+		}
+
+		grpcSrv = grpcserver.New(
+			cfg.GRPCAddress,
+			grpcHandler,
+			subnet,
+		)
+
+		customLogger.Infof("gRPC сервер слушает %s", cfg.GRPCAddress)
+		go func() {
+			if err := grpcSrv.Start(); err != nil {
+				customLogger.Fatalf("gRPC server error: %v", err)
+			}
+		}()
+	}
 
 	if !usePostgreSQL && cfg.Restore && cfg.FileStoragePath != "" {
 		loadCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -142,6 +172,11 @@ func main() {
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		customLogger.Fatalf("Принудительное завершение: %v", err)
+	}
+
+	if grpcSrv != nil {
+		customLogger.Info("Останавливаем gRPC сервер...")
+		grpcSrv.Stop()
 	}
 
 	if !usePostgreSQL && cfg.FileStoragePath != "" {

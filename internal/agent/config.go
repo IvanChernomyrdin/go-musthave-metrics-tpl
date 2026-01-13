@@ -17,6 +17,7 @@ import (
 
 type Config struct {
 	ServerURL      string        `json:"address" env:"ADDRESS"`
+	GRPCAddr       string        `json:"grpc_address" env:"GRPC_ADDRESS"`
 	PollInterval   time.Duration `json:"poll_interval" env:"POLL_INTERVAL"`
 	ReportInterval time.Duration `json:"report_interval" env:"REPORT_INTERVAL"`
 	Key            string        `json:"key" env:"KEY"`
@@ -62,6 +63,7 @@ func (d *jsonDuration) UnmarshalJSON(b []byte) error {
 
 type fileConfig struct {
 	Address        *string       `json:"address"`
+	GRPCAddress    *string       `json:"grpc_address"`
 	PollInterval   *jsonDuration `json:"poll_interval"`
 	ReportInterval *jsonDuration `json:"report_interval"`
 	CryptoKey      *string       `json:"crypto_key"`
@@ -93,6 +95,7 @@ func LoadConfig() (*Config, error) {
 	limit := fs.Int("l", cfg.RateLimit, "rate limit")
 	crypto := fs.String("crypto-key", cfg.CryptoKey, "path to public key")
 	_ = fs.String("s", cfg.CryptoKey, "alias for -crypto-key (deprecated)")
+	grpcAddr := fs.String("grpc", "", "gRPC server address")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return nil, err
@@ -134,6 +137,8 @@ func LoadConfig() (*Config, error) {
 			}
 		case "c", "config":
 			cfg.ConfigFile = cfgPath
+		case "grpc":
+			cfg.GRPCAddr = *grpcAddr
 		}
 	})
 
@@ -212,6 +217,9 @@ func loadFromJSON(filename string, cfg *Config) error {
 	if jc.CryptoKey != nil {
 		cfg.CryptoKey = *jc.CryptoKey
 	}
+	if jc.GRPCAddress != nil {
+		cfg.GRPCAddr = *jc.GRPCAddress
+	}
 
 	return nil
 }
@@ -249,6 +257,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v, ok := os.LookupEnv("CONFIG"); ok {
 		cfg.ConfigFile = v
+	}
+	if v, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
+		cfg.GRPCAddr = v
 	}
 }
 
@@ -297,4 +308,8 @@ func wasVisited(fs *flag.FlagSet, name string) bool {
 		}
 	})
 	return visited
+}
+
+func (c *Config) GetGRPCAddr() string {
+	return c.GRPCAddr
 }
