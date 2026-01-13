@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	model "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
+	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 	"github.com/go-resty/resty/v2"
 	"golang.org/x/sync/errgroup"
 )
@@ -118,14 +120,36 @@ type HTTPSender struct {
 	errorClassifier *HTTPErrorClassifier
 	HashKey         string
 	pubKey          *rsa.PublicKey
+	agentIP         net.IP
+}
+
+func getLocalIP() (net.IP, error) {
+	conn, err := net.Dial("udp", "8.8.8.8:80") //google
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	localAddr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return nil, errors.New("failed to get UDP IP")
+	}
+	return localAddr.IP, nil
 }
 
 func NewHTTPSender(serverURL string, HashKey string, publicKeyPath string) (*HTTPSender, error) {
 	client := resty.New()
 	client.SetTimeout(10 * time.Second)
+	var err error
+	customLogger := logger.NewHTTPLogger().Logger.Sugar()
+
+	ip, err := getLocalIP()
+	if err != nil {
+		customLogger.Errorf("failed to get local IP: %v", err)
+		return nil, fmt.Errorf("failed to get local IP: %w", err)
+	}
 
 	var pubKey *rsa.PublicKey
-	var err error
 
 	if publicKeyPath != "" {
 		pubKey, err = LoadPublicKey(publicKeyPath)
@@ -142,6 +166,7 @@ func NewHTTPSender(serverURL string, HashKey string, publicKeyPath string) (*HTT
 		errorClassifier: NewHTTPErrorClassifier(),
 		HashKey:         HashKey,
 		pubKey:          pubKey,
+		agentIP:         ip,
 	}, nil
 }
 
@@ -309,7 +334,8 @@ func (s *HTTPSender) sendJSON(ctx context.Context, metric []byte) error {
 		SetContext(ctx).
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
-		SetBody(dataToSend)
+		SetBody(dataToSend).
+		SetHeader("X-Real-IP", s.agentIP.String())
 
 	// добавляем заголовок при шифровании
 	if s.pubKey != nil {
@@ -361,7 +387,8 @@ func (s *HTTPSender) sendText(ctx context.Context, metric model.Metrics) error {
 
 	req := s.client.R().
 		SetContext(ctx).
-		SetHeader("Content-Type", "text/plain")
+		SetHeader("Content-Type", "text/plain").
+		SetHeader("X-Real-IP", s.agentIP.String())
 
 	// Для text формата нужно сериализовать данные для хеша
 	textData := fmt.Sprintf("%s:%s:%s", metric.MType, metric.ID, valueStr)
@@ -427,7 +454,8 @@ func (s *HTTPSender) sendBatch(ctx context.Context, metrics []model.Metrics) err
 		SetContext(ctx).
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
-		SetBody(dataToSend)
+		SetBody(dataToSend).
+		SetHeader("X-Real-IP", s.agentIP.String())
 
 	if s.pubKey != nil {
 		if len(dataToSend) < 180 {

@@ -90,7 +90,7 @@ func main() {
 	if cfg.AuditURL != "" {
 		auditReceivers = append(auditReceivers, &middleware.URLAuditReceiver{URL: cfg.AuditURL})
 	}
-	r := httpserver.NewRouter(h, cfg.HashKey, auditReceivers, cfg.CryptoKey)
+	r := httpserver.NewRouter(h, cfg.HashKey, auditReceivers, cfg.CryptoKey, cfg.TrustedSubnet)
 
 	var ticker *time.Ticker
 	if !usePostgreSQL && cfg.FileStoragePath != "" {

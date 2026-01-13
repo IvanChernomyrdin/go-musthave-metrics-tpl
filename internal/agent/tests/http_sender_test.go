@@ -44,6 +44,10 @@ func TestHTTPSender_SendMetrics(t *testing.T) {
 			assert.Equal(t, "/updates/", r.URL.Path)
 			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 			assert.Equal(t, "gzip", r.Header.Get("Content-Encoding"))
+
+			realIP := r.Header.Get("X-Real-IP")
+			assert.NotEmpty(t, realIP, "X-Real-IP header must be set")
+
 			w.WriteHeader(http.StatusOK)
 		})
 
