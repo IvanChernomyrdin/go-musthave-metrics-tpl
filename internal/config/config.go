@@ -25,6 +25,7 @@ type Config struct {
 	WriteTimeout    int    `env:"WRITE_TIMEOUT"`
 	IdleTimeout     int    `env:"IDLE_TIMEOUT"`
 	CryptoKey       string `env:"CRYPTO_KEY"`
+	TrustedSubnet   string `env:"TRUSTED_SUBNET"`
 }
 
 type jsonSeconds int
@@ -80,6 +81,7 @@ func Load() *Config {
 	auditFile := fs.String("audit-file", cfg.AuditFile, "audit path logs file")
 	auditURL := fs.String("audit-url", cfg.AuditURL, "audit url push logs")
 	cryptoKey := fs.String("crypto-key", cfg.CryptoKey, "the path to private key")
+	trustedSubnet := fs.String("t", cfg.TrustedSubnet, "trusted subnet CIDR")
 
 	_ = fs.Parse(os.Args[1:])
 
@@ -118,6 +120,8 @@ func Load() *Config {
 			cfg.AuditURL = *auditURL
 		case "crypto-key":
 			cfg.CryptoKey = *cryptoKey
+		case "t":
+			cfg.TrustedSubnet = *trustedSubnet
 		}
 	})
 
@@ -146,6 +150,7 @@ func loadFromJSON(filename string, cfg *Config) {
 		Restore       *bool        `json:"restore"`
 		DatabaseDSN   *string      `json:"database_dsn"`
 		CryptoKey     *string      `json:"crypto_key"`
+		TrustedSubnet *string      `json:"trusted_subnet"`
 	}
 
 	if err := json.Unmarshal(data, &jc); err != nil {
@@ -170,6 +175,9 @@ func loadFromJSON(filename string, cfg *Config) {
 	}
 	if jc.CryptoKey != nil {
 		cfg.CryptoKey = *jc.CryptoKey
+	}
+	if jc.TrustedSubnet != nil {
+		cfg.TrustedSubnet = *jc.TrustedSubnet
 	}
 }
 

@@ -92,7 +92,7 @@ func LoadConfig() (*Config, error) {
 	key := fs.String("k", cfg.Key, "sha256 key")
 	limit := fs.Int("l", cfg.RateLimit, "rate limit")
 	crypto := fs.String("crypto-key", cfg.CryptoKey, "path to public key")
-	_ = fs.String("s", cfg.CryptoKey, "alias for -crypto-key (deprecated)") // чтобы не ломать твой старый -s
+	_ = fs.String("s", cfg.CryptoKey, "alias for -crypto-key (deprecated)")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return nil, err

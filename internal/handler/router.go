@@ -11,9 +11,16 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
-func NewRouter(h *Handler, HashKey string, auditReceivers []middleware.AuditReceiver, privateKeyPath string) http.Handler {
+func NewRouter(h *Handler,
+	HashKey string,
+	auditReceivers []middleware.AuditReceiver,
+	privateKeyPath string,
+	trustedSubnet string) http.Handler {
 	r := chi.NewRouter()
-
+	// получаем IP агента и кладём в context
+	r.Use(middleware.GetRealIPMiddleware)
+	// берём IP из context и проверяем trusted_subnet
+	r.Use(middleware.TrustedSubnetMiddleware(trustedSubnet))
 	// декомпрессия данных
 	r.Use(middleware.GzipDecompression)
 	// расшифровываем боди если был передан адрес на приватный ключ и если есть заголовок

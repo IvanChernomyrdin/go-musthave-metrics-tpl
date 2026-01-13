@@ -12,7 +12,6 @@ import (
 
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 	logger "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
-	runtime "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/pgk/logger"
 )
 
 type AuditEvent struct {
@@ -121,7 +120,7 @@ func AuditMiddleware(auditReceivers []AuditReceiver) func(next http.Handler) htt
 
 			for _, receiver := range auditReceivers {
 				if err := receiver.Notify(event); err != nil {
-					runtime.NewHTTPLogger().Logger.Sugar().Warnf("Error while sending audit: %v", err)
+					logger.NewHTTPLogger().Logger.Sugar().Warnf("Error while sending audit: %v", err)
 				}
 			}
 			next.ServeHTTP(w, r)

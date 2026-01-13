@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	handlerhttp "github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/handler"
+	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/middleware"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/mocks"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/model"
 	"github.com/IvanChernomyrdin/go-musthave-metrics-tpl/internal/service"
@@ -16,8 +17,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setupTestRouter(handler *handlerhttp.Handler, HashKey string) *chi.Mux {
+func setupTestRouter(handler *handlerhttp.Handler, HashKey string, trustedSubnet string) *chi.Mux {
 	r := chi.NewRouter()
+
+	r.Use(middleware.GetRealIPMiddleware)
+	r.Use(middleware.TrustedSubnetMiddleware(trustedSubnet))
 
 	r.Post("/value", handler.GetValueJSON)
 	r.Post("/value/", handler.GetValueJSON)
@@ -36,7 +40,7 @@ func TestHandler_UpdateMetric_URLParams(t *testing.T) {
 	mockRepo := new(mocks.MetricsRepo)
 	svc := service.NewMetricsService(mockRepo)
 	handler := handlerhttp.NewHandler(svc)
-	router := setupTestRouter(handler, "")
+	router := setupTestRouter(handler, "", "")
 
 	t.Run("обновление gauge через URL params", func(t *testing.T) {
 		mockRepo.On("UpsertGauge", "testMetric", 123.45).Return(nil).Once()
@@ -69,7 +73,7 @@ func TestHandler_UpdateMetric_JSON(t *testing.T) {
 	mockRepo := new(mocks.MetricsRepo)
 	svc := service.NewMetricsService(mockRepo)
 	handler := handlerhttp.NewHandler(svc)
-	router := setupTestRouter(handler, "")
+	router := setupTestRouter(handler, "", "")
 
 	t.Run("обновление gauge через JSON", func(t *testing.T) {
 		metric := model.Metrics{
@@ -97,7 +101,7 @@ func TestHandler_GetValue(t *testing.T) {
 	mockRepo := new(mocks.MetricsRepo)
 	svc := service.NewMetricsService(mockRepo)
 	handler := handlerhttp.NewHandler(svc)
-	router := setupTestRouter(handler, "")
+	router := setupTestRouter(handler, "", "")
 
 	t.Run("получение gauge значения", func(t *testing.T) {
 		mockRepo.On("GetGauge", "testMetric").Return(123.456, true).Once()
@@ -129,7 +133,7 @@ func TestHandler_GetAll(t *testing.T) {
 	mockRepo := new(mocks.MetricsRepo)
 	svc := service.NewMetricsService(mockRepo)
 	handler := handlerhttp.NewHandler(svc)
-	router := setupTestRouter(handler, "")
+	router := setupTestRouter(handler, "", "")
 
 	t.Run("отображение всех метрик", func(t *testing.T) {
 		gauges := map[string]float64{
@@ -158,7 +162,7 @@ func TestHandler_UpdateMetricsBatch(t *testing.T) {
 	mockRepo := new(mocks.MetricsRepo)
 	svc := service.NewMetricsService(mockRepo)
 	handler := handlerhttp.NewHandler(svc)
-	router := setupTestRouter(handler, "")
+	router := setupTestRouter(handler, "", "")
 
 	t.Run("пакетное обновление метрик", func(t *testing.T) {
 		metrics := []model.Metrics{
